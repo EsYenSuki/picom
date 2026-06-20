@@ -1549,6 +1549,37 @@ static void handle_pending_updates(struct session *ps, double delta_t) {
 	// Process window flags (stale images)
 	refresh_images(ps);
 	assert(ps->pending_updates == false);
+
+	// Activity-based workspace switch window: keep active until
+	// no windows trigger workspace animations for N consecutive frames
+	if (ps->workspace_switch_active) {
+		int workspace_changes = 0;
+		wm_stack_foreach(ps->wm, cursor) {
+			auto w = wm_ref_deref(cursor);
+			if (w && w->workspace_change_triggered) {
+				workspace_changes++;
+			}
+		}
+
+		if (workspace_changes > 0) {
+			ps->workspace_idle_frames = 0;
+		} else {
+			ps->workspace_idle_frames++;
+		}
+
+		// Clear triggered flags for next frame
+		wm_stack_foreach_rev(ps->wm, cursor) {
+			auto w = wm_ref_deref(cursor);
+			if (w) {
+				w->workspace_change_triggered = false;
+			}
+		}
+
+		if (ps->workspace_idle_frames >= ps->workspace_transition_quiet) {
+			ps->workspace_switch_active = false;
+			ps->workspace_idle_frames = 0;
+		}
+	}
 }
 
 /**
@@ -2089,6 +2120,23 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 
 	ps->atoms = init_atoms(ps->c.c);
 	ps->c2_state = c2_state_new(ps->atoms);
+
+	// Initialize workspace tracking
+	ps->current_desktop = -1;
+	ps->previous_desktop = -1;
+	ps->workspace_direction = 0;
+	ps->workspace_switch_active = false;
+	ps->workspace_idle_frames = 0;
+	ps->workspace_transition_quiet = 2;
+
+	// Query initial workspace
+	auto ws_prop = x_get_prop(&ps->c, ps->c.screen_info->root, ps->atoms->a_NET_CURRENT_DESKTOP, 1L, XCB_ATOM_CARDINAL, 32);
+	if (ws_prop.nitems >= 1) {
+		ps->current_desktop = (int)ws_prop.c32[0];
+		ps->previous_desktop = ps->current_desktop;
+		log_debug("Initial workspace: %d", ps->current_desktop);
+	}
+	free_winprop(&ws_prop);
 
 	// Get needed atoms for c2 condition lists
 	options_postprocess_c2_lists(ps->c2_state, &ps->c, &ps->o);

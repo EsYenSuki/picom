@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <X11/Xlibint.h>
 #include <xcb/damage.h>
@@ -526,6 +527,40 @@ static inline void ev_expose(session_t *ps, xcb_expose_event_t *ev) {
 	}
 }
 
+/// Handle _NET_CURRENT_DESKTOP property change on root window to detect workspace switches
+static void ev_update_current_desktop(session_t *ps) {
+	auto prop = x_get_prop(&ps->c, ps->c.screen_info->root, ps->atoms->a_NET_CURRENT_DESKTOP, 1L, XCB_ATOM_CARDINAL, 32);
+	if (prop.nitems < 1) {
+		log_debug("Failed to read _NET_CURRENT_DESKTOP");
+		free_winprop(&prop);
+		return;
+	}
+
+	int new_desktop = (int)prop.c32[0];
+	free_winprop(&prop);
+
+	if (ps->current_desktop == -1) {
+		// First time reading the desktop number, no workspace switch
+		ps->current_desktop = new_desktop;
+		ps->previous_desktop = new_desktop;
+		ps->workspace_direction = 0;
+		return;
+	}
+
+	if (new_desktop == ps->current_desktop) {
+		// Same desktop, no switch
+		return;
+	}
+
+	log_debug("Workspace switch: desktop %d -> %d", ps->current_desktop, new_desktop);
+	ps->previous_desktop = ps->current_desktop;
+	ps->current_desktop = new_desktop;
+	ps->workspace_direction = (new_desktop < ps->previous_desktop) ? -1 : 1;
+	ps->workspace_switch_active = true;
+	ps->workspace_idle_frames = 0;
+	force_repaint(ps);
+}
+
 static inline void ev_property_notify(session_t *ps, xcb_property_notify_event_t *ev) {
 	log_debug("{ atom = %#010x, window = %#010x, state = %d }", ev->atom, ev->window,
 	          ev->state);
@@ -547,6 +582,8 @@ static inline void ev_property_notify(session_t *ps, xcb_property_notify_event_t
 	if (ps->c.screen_info->root == ev->window) {
 		if (ps->o.use_ewmh_active_win && ps->atoms->a_NET_ACTIVE_WINDOW == ev->atom) {
 			ev_update_focused(ps);
+		} else if (ps->atoms->a_NET_CURRENT_DESKTOP == ev->atom) {
+			ev_update_current_desktop(ps);
 		} else {
 			// Destroy the root "image" if the wallpaper probably changed
 			if (x_is_root_back_pixmap_atom(ps->atoms, ev->atom)) {

@@ -81,6 +81,10 @@ enum animation_trigger {
 	/// When one of a window's color properties changes,
 	/// This includes: shadow-color
 	ANIMATION_TRIGGER_COLOR,
+	/// When a window appears during a workspace switch (incoming)
+	ANIMATION_TRIGGER_WORKSPACE_FLY_IN,
+	/// When a window disappears during a workspace switch (outgoing)
+	ANIMATION_TRIGGER_WORKSPACE_FLY_OUT,
 
 	ANIMATION_TRIGGER_INVALID,
 	ANIMATION_TRIGGER_COUNT = ANIMATION_TRIGGER_INVALID,
@@ -101,6 +105,8 @@ static const char *animation_trigger_names[] attr_unused = {
     [ANIMATION_TRIGGER_SIZE] = "size",
     [ANIMATION_TRIGGER_POSITION] = "position",
     [ANIMATION_TRIGGER_COLOR] = "color",
+    [ANIMATION_TRIGGER_WORKSPACE_FLY_IN] = "workspace-fly-in",
+    [ANIMATION_TRIGGER_WORKSPACE_FLY_OUT] = "workspace-fly-out",
     [ANIMATION_TRIGGER_ALIAS_GEOMETRY] = "geometry",
 };
 

@@ -146,6 +146,8 @@ struct win {
 	bool to_paint;
 	/// Whether this window is in open/close state.
 	bool in_openclose;
+	/// Whether this window triggered workspace animation this frame
+	bool workspace_change_triggered;
 
 	// Client window related members
 	/// A bitflag of window types. According to ICCCM, a window can have more than one
@@ -210,6 +212,9 @@ struct win {
 
 	struct c2_window_state c2_state;
 
+	/// Workspace/desktop this window belongs to (-1 = sticky/all/unknown, >= 0 = specific desktop)
+	int desktop;
+
 	/// The damaged region of the window, in window local coordinates.
 	region_t damaged;
 
@@ -239,6 +244,7 @@ struct win_script_context {
 	double monitor_x, monitor_y;
 	double monitor_width, monitor_height;
 	struct color shadow_color, shadow_color_before;
+	double workspace_direction;
 };
 // NOLINTNEXTLINE(bugprone-sizeof-expression)
 static_assert(SCRIPT_CTX_PLACEHOLDER_BASE > sizeof(struct win_script_context),
@@ -268,6 +274,7 @@ static const struct script_context_info win_script_context_info[] = {
     {"window-shadow-red-before", X(shadow_color_before.red)},
     {"window-shadow-green-before", X(shadow_color_before.green)},
     {"window-shadow-blue-before", X(shadow_color_before.blue)},
+    {"workspace-direction", X(workspace_direction)},
     {NULL, 0}        //
 };
 #undef X

@@ -299,6 +299,17 @@ static void win_update_properties(session_t *ps, struct win *w) {
 		}
 	}
 
+	if (win_fetch_and_unset_property_stale(w, ps->atoms->a_NET_WM_DESKTOP)) {
+		auto prop = x_get_prop(&ps->c, win_id(w), ps->atoms->a_NET_WM_DESKTOP, 1L, XCB_ATOM_CARDINAL, 32);
+		if (prop.nitems >= 1) {
+			w->desktop = (int)prop.c32[0];
+			log_debug("Window %#010x (%s) desktop changed to %d", win_id(w), w->name, w->desktop);
+		} else {
+			w->desktop = -1;  // sticky or unknown
+		}
+		free_winprop(&prop);
+	}
+
 	if (ps->o.track_leader &&
 	    (win_fetch_and_unset_property_stale(w, ps->atoms->aWM_CLIENT_LEADER) ||
 	     win_fetch_and_unset_property_stale(w, ps->atoms->aWM_TRANSIENT_FOR) ||
@@ -1307,7 +1318,7 @@ struct win *win_maybe_allocate(session_t *ps, struct wm_ref *cursor,
 	    ps->atoms->a_NET_WM_NAME,        ps->atoms->aWM_CLASS,
 	    ps->atoms->aWM_WINDOW_ROLE,      ps->atoms->a_COMPTON_SHADOW,
 	    ps->atoms->aWM_CLIENT_LEADER,    ps->atoms->aWM_TRANSIENT_FOR,
-	    ps->atoms->a_NET_WM_STATE,
+	    ps->atoms->a_NET_WM_STATE,       ps->atoms->a_NET_WM_DESKTOP,
 	};
 	win_set_properties_stale(new, init_stale_props, ARR_SIZE(init_stale_props));
 	c2_window_state_init(ps->c2_state, &new->c2_state);
@@ -1624,7 +1635,14 @@ win_script_context_prepare(struct session *ps, struct win *w) {
 	    .monitor_height = monitor.y2 - monitor.y1,
 	    .shadow_color_before = w->previous.shadow_color,
 	    .shadow_color = w->options.shadow_color,
+	    .workspace_direction = ps->workspace_direction,
 	};
+	if (w->state == WSTATE_MAPPED && w->previous.state == WSTATE_UNMAPPED &&
+	    ps->workspace_switch_active) {
+		auto wopts = win_options(w);
+		ret.opacity_before = wopts.opacity;
+		ret.blur_opacity_before = wopts.blur_opacity;
+	}
 	return ret;
 }
 
@@ -1750,13 +1768,19 @@ bool win_process_animation_and_state_change(struct session *ps, struct win *w, d
 			}
 		}
 
-		switch (WSTATE_PAIR(old_state, w->state)) {
-		case WSTATE_PAIR(WSTATE_UNMAPPED, WSTATE_MAPPED):
+	switch (WSTATE_PAIR(old_state, w->state)) {
+	case WSTATE_PAIR(WSTATE_UNMAPPED, WSTATE_MAPPED):
+		if (ps->workspace_switch_active) {
+			trigger = ANIMATION_TRIGGER_WORKSPACE_FLY_IN;
+		} else {
 			trigger = w->in_openclose ? ANIMATION_TRIGGER_OPEN
 			                          : ANIMATION_TRIGGER_SHOW;
-			break;
-		case WSTATE_PAIR(WSTATE_UNMAPPED, WSTATE_DESTROYED):
-			if ((!ps->o.no_fading_destroyed_argb || !win_has_alpha(w)) &&
+		}
+		break;
+	case WSTATE_PAIR(WSTATE_UNMAPPED, WSTATE_DESTROYED):
+		if (ps->workspace_switch_active) {
+			trigger = ANIMATION_TRIGGER_WORKSPACE_FLY_OUT;
+		} else if ((!ps->o.no_fading_destroyed_argb || !win_has_alpha(w)) &&
 			    w->running_animation_instance != NULL) {
 				trigger = ANIMATION_TRIGGER_CLOSE;
 			}
@@ -1770,7 +1794,11 @@ bool win_process_animation_and_state_change(struct session *ps, struct win *w, d
 			}
 			break;
 		case WSTATE_PAIR(WSTATE_MAPPED, WSTATE_UNMAPPED):
-			trigger = ANIMATION_TRIGGER_HIDE;
+			if (ps->workspace_switch_active) {
+				trigger = ANIMATION_TRIGGER_WORKSPACE_FLY_OUT;
+			} else {
+				trigger = ANIMATION_TRIGGER_HIDE;
+			}
 			break;
 		default:
 			log_error("Impossible state transition from %d to %d", old_state,
@@ -1831,6 +1859,11 @@ bool win_process_animation_and_state_change(struct session *ps, struct win *w, d
 
 	log_debug("Starting animation %s for window %#010x (%s)",
 	          animation_trigger_names[trigger], win_id(w), w->name);
+
+	if (trigger == ANIMATION_TRIGGER_WORKSPACE_FLY_IN ||
+	    trigger == ANIMATION_TRIGGER_WORKSPACE_FLY_OUT) {
+		w->workspace_change_triggered = true;
+	}
 
 	if (win_check_flags_any(w, WIN_FLAGS_PIXMAP_STALE)) {
 		// Grab the old pixmap, animations might need it

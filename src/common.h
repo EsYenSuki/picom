@@ -200,6 +200,20 @@ typedef struct session {
 	// === Atoms ===
 	struct atom *atoms;
 
+	// === Workspace tracking ===
+	/// Current EWMH desktop (workspace) number, -1 if unknown
+	int current_desktop;
+	/// Previous desktop number
+	int previous_desktop;
+	/// Workspace change direction: -1 = left, +1 = right, 0 = none
+	int workspace_direction;
+	/// True while workspace switch is still settling
+	bool workspace_switch_active;
+	/// Consecutive frames with zero window state changes during switch
+	int workspace_idle_frames;
+	/// Quiet frames needed before deactivating workspace window (default: 2)
+	int workspace_transition_quiet;
+
 #ifdef CONFIG_DBUS
 	// === DBus related ===
 	struct cdbus_data *dbus_data;
