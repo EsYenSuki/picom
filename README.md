@@ -13,6 +13,8 @@ You can leave your feedback or thoughts in the [discussion tab](https://github.c
 
 ## Change Log
 
+**For workspace change transition animation to work** see [*THIS*](https://github.com/AN-ASZ/AnDWM/commit/951ca1d6ecdb00ce11135463759bd2d795a4f32c#diff-4b334df997bfb015c52da50c44d43cb710b4b93ca81c4b2ff0c083c8a2f612f1R5095-R5134) you must change order of _NET_CURRENT_DESKTOP updater to run before tag change
+
 See [Releases](https://github.com/yshui/picom/releases)
 
 ## Build
