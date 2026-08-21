@@ -472,6 +472,15 @@ typedef struct options {
 	double max_brightness;
 	// Radius of rounded window corners
 	int corner_radius;
+
+	// Zoom
+	int zoom_duration;
+	double zoom_bezier[4];
+	double zoom_min;
+	double zoom_max;
+	/// Raw --zoom argument. When a picom instance is already running, this is
+	/// forwarded to it over the zoom socket and this process exits.
+	char *zoom_ipc;
 	/// Rounded corners blacklist. A linked list of conditions.
 	struct list_node rounded_corners_blacklist;
 	/// Rounded corner rules. A linked list of conditions.

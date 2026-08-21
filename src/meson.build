@@ -153,6 +153,12 @@ picom = executable(
 	gnu_symbol_visibility: 'hidden',
 )
 
+picom_zoom = executable(
+	'picom-zoom',
+	'zoom_client.c',
+	install: true,
+)
+
 if get_option('unittest')
 	test('picom unittest', picom, args: ['--unittest'])
 endif

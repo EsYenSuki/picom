@@ -1221,6 +1221,17 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 		opt->max_brightness = 1.0;
 	}
 
+	// Zoom options
+	config_lookup_int(&cfg, "zoom-duration", &opt->zoom_duration);
+	config_lookup_float(&cfg, "zoom-min", &opt->zoom_min);
+	config_lookup_float(&cfg, "zoom-max", &opt->zoom_max);
+	subcfg = config_lookup(&cfg, "zoom-bezier");
+	if (subcfg && config_setting_is_array(subcfg)) {
+		for (int i = 0; i < 4 && i < config_setting_length(subcfg); i++) {
+			opt->zoom_bezier[i] = config_setting_get_float_elem(subcfg, i);
+		}
+	}
+
 	// --window-shader-fg
 	subcfg = config_lookup(&cfg, "window-shader-fg");
 	if (subcfg) {

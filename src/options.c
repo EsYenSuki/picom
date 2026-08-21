@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include <locale.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,6 +108,17 @@ static bool store_float(const struct picom_option *opt, const struct picom_arg *
 		return false;
 	}
 	*dst = max2(minmax[0], min2(*dst, minmax[1]));
+	return true;
+}
+
+static bool store_zoom_bezier(const struct picom_option *opt, const struct picom_arg *arg,
+                              const char *arg_str, void *output) {
+	double *dst = (double *)(output + arg->offset);
+	if (sscanf(arg_str, "%lf,%lf,%lf,%lf", &dst[0], &dst[1], &dst[2], &dst[3]) != 4) {
+		log_error("Argument for option `--%s` must be 4 comma-separated floats: %s",
+		          opt->long_name, arg_str);
+		return false;
+	}
 	return true;
 }
 
@@ -473,7 +485,17 @@ static const struct picom_option picom_options[] = {
     [804] = {"realtime"                 , ENABLE(use_realtime_scheduling)  , "Enable realtime scheduling. This might reduce latency, but might also cause "
                                                                              "other issues. Disable this if you see the compositor being killed."},
     [805] = {"monitor"                  , ENABLE(inspect_monitor)          , "For picom-inspect, run in a loop and dump information every time something "
-                                                                             "changed about a window.", "picom-inspect"},
+                                                                              "changed about a window.", "picom-inspect"},
+
+    // Zoom options
+    [810] = {"zoom-duration"            , INTEGER(zoom_duration, 0, INT_MAX), "Zoom animation duration in milliseconds. (default 470)"},
+    [811] = {"zoom-bezier"              , required_argument, {.offset = offsetof(options_t, zoom_bezier), .handler = store_zoom_bezier}, "Zoom animation bezier curve as x1,y1,x2,y2. (default 0.22,1.3,0.36,1.0)"},
+    [812] = {"zoom-min"                 , FLOAT(zoom_min, 0.1, 10)          , "Minimum zoom factor. (default 1.0)"},
+    [813] = {"zoom-max"                 , FLOAT(zoom_max, 0.1, 10)          , "Maximum zoom factor. (default 5.0)"},
+    [814] = {"zoom"                     , NAMED_STRING(zoom_ipc, "VALUE")   , "Zoom control. If a picom instance is already running, send the zoom command "
+                                                                              "to it and exit. VALUE is an absolute factor (e.g. 1.5) or a relative "
+                                                                              "change (e.g. +0.2 or -0.2). Otherwise start normally and apply VALUE "
+                                                                              "as the initial zoom."},
 
     // Flags that takes an argument
     ['r'] = {"shadow-radius"               , INTEGER(shadow_radius, 0, INT_MAX)             , "The blur radius for shadows. (default 12)"},

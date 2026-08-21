@@ -15,6 +15,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <ev.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <libgen.h>
@@ -24,6 +25,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 #include <xcb/composite.h>
@@ -104,6 +107,246 @@ const struct wintype_info WINTYPES[] = {
     X(dnd, DND),
 #undef X
 };
+
+// === Zoom functions ===
+
+static inline int64_t timespec_ms(struct timespec ts);
+
+static double zoom_bezier_x(double t, const double *bezier) {
+	return 3.0 * t * (1 - t) * (1 - t) * bezier[0] +
+	       3.0 * t * t * (1 - t) * bezier[2] +
+	       t * t * t;
+}
+
+static double zoom_bezier_y(double t, const double *bezier) {
+	return 3.0 * t * (1 - t) * (1 - t) * bezier[1] +
+	       3.0 * t * t * (1 - t) * bezier[3] +
+	       t * t * t;
+}
+
+static double zoom_bezier_dx(double t, const double *bezier) {
+	return 3.0 * (1 - t) * (1 - t) * bezier[0] +
+	       6.0 * t * (1 - t) * (bezier[2] - bezier[0]) +
+	       3.0 * t * t * (1.0 - bezier[2]);
+}
+
+static double zoom_ease(double tp, const double *bezier) {
+	if (tp <= 0.0) return 0.0;
+	if (tp >= 1.0) return 1.0;
+	double t = tp;
+	for (int i = 0; i < 8; i++) {
+		double dx = zoom_bezier_dx(t, bezier);
+		if (dx < 1e-7) break;
+		t -= (zoom_bezier_x(t, bezier) - tp) / dx;
+		if (t < 0.0) t = 0.0;
+		else if (t > 1.0) t = 1.0;
+	}
+	return zoom_bezier_y(t, bezier);
+}
+
+static void zoom_start_animation(session_t *ps, double target) {
+	target = max2(ps->o.zoom_min, min2(target, ps->o.zoom_max));
+	if (fabs(target - ps->zoom.target) < 1e-9 && ps->zoom.animating) {
+		return;
+	}
+	ps->zoom.start = ps->zoom.current;
+	ps->zoom.target = target;
+	ps->zoom.start_time = timespec_ms(get_time_timespec());
+	ps->zoom.animating = true;
+	force_repaint(ps);
+}
+
+static void zoom_update(session_t *ps) {
+	if (ps->zoom.animating) {
+		int64_t now = timespec_ms(get_time_timespec());
+		double elapsed = (double)(now - ps->zoom.start_time);
+		double tp = (ps->o.zoom_duration > 0) ? elapsed / ps->o.zoom_duration : 1.0;
+		if (tp >= 1.0) {
+			ps->zoom.current = ps->zoom.target;
+			ps->zoom.animating = false;
+		} else {
+			ps->zoom.current = ps->zoom.start +
+			    (ps->zoom.target - ps->zoom.start) * zoom_ease(tp, ps->o.zoom_bezier);
+		}
+	}
+}
+
+static void zoom_poll_pointer(session_t *ps) {
+	if (ps->zoom.current == 1.0 && !ps->zoom.animating) {
+		return;
+	}
+	auto pointer = XCB_AWAIT(xcb_query_pointer, &ps->c, ps->c.screen_info->root);
+	if (pointer) {
+		ps->zoom.focal = (ivec2){.x = pointer->root_x, .y = pointer->root_y};
+		free(pointer);
+	} else {
+		ps->zoom.focal = (ivec2){.x = ps->root_width / 2, .y = ps->root_height / 2};
+	}
+}
+
+static void zoom_socket_callback(EV_P_ ev_io *w, int revents attr_unused) {
+	session_t *ps = session_ptr(w, zoom_socket_watcher);
+	char buf[64];
+	ssize_t n = recv(w->fd, buf, sizeof(buf) - 1, 0);
+	if (n <= 0) {
+		return;
+	}
+	buf[n] = '\0';
+	double val;
+	if (sscanf(buf, "zoom %lf", &val) == 1) {
+		double target;
+		if (buf[5] == '+' || buf[5] == '-') {
+			target = ps->zoom.target + val;
+		} else {
+			target = val;
+		}
+		zoom_start_animation(ps, target);
+	}
+}
+
+static void zoom_make_socket_path(session_t *ps) {
+	const char *display = DisplayString(ps->c.dpy);
+	char safe[64];
+	int j = 0;
+	for (int i = 0; display[i] && j < 60; i++) {
+		safe[j++] = (display[i] == '/') ? '_' : display[i];
+	}
+	safe[j] = '\0';
+	snprintf(ps->zoom_socket_path, sizeof(ps->zoom_socket_path), "/tmp/picom-%s.sock", safe);
+}
+
+/// Handle the --zoom argument before any initialization, so
+/// `picom --zoom <value>` works as a standalone client command without a
+/// config file or an X connection. Exits this process if a running instance
+/// was reached.
+static void zoom_client_mode_argv(int argc, char *const *argv) {
+	const char *value = NULL;
+	for (int i = 1; i < argc; i++) {
+		if ((strcmp(argv[i], "--zoom") == 0 || strcmp(argv[i], "-z") == 0) &&
+		    i + 1 < argc) {
+			value = argv[i + 1];
+			break;
+		}
+		if (strncmp(argv[i], "--zoom=", 7) == 0) {
+			value = argv[i] + 7;
+			break;
+		}
+	}
+	if (!value) {
+		return;
+	}
+
+	const char *display = getenv("DISPLAY");
+	if (!display || !display[0]) {
+		display = ":0";
+	}
+	char safe[64];
+	int j = 0;
+	for (int i = 0; display[i] && j < 60; i++) {
+		safe[j++] = (display[i] == '/') ? '_' : display[i];
+	}
+	safe[j] = '\0';
+	char socket_path[108];
+	snprintf(socket_path, sizeof(socket_path), "/tmp/picom-%s.sock", safe);
+
+	struct sockaddr_un addr = {.sun_family = AF_UNIX};
+	size_t path_len = strlen(socket_path);
+	if (path_len >= sizeof(addr.sun_path)) {
+		path_len = sizeof(addr.sun_path) - 1;
+	}
+	memcpy(addr.sun_path, socket_path, path_len);
+	addr.sun_path[path_len] = '\0';
+
+	int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (fd < 0) {
+		return;
+	}
+	// connect() fails with ECONNREFUSED if the socket file is stale (no live
+	// receiver), so reaching here means a running instance owns the socket.
+	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+		close(fd);
+		return;
+	}
+	char msg[64];
+	snprintf(msg, sizeof(msg), "zoom %s", value);
+	bool ok = send(fd, msg, strlen(msg), 0) > 0;
+	close(fd);
+	if (!ok) {
+		fprintf(stderr, "Failed to send zoom command to %s.\n", socket_path);
+		exit(1);
+	}
+	printf("Zoom command '%s' sent to running picom instance (%s).\n", msg,
+	       socket_path);
+	exit(0);
+}
+
+/// Apply the --zoom value as the initial zoom animation on startup.
+static void zoom_apply_initial(session_t *ps, const char *value) {
+	char *end = NULL;
+	double val = strtod(value, &end);
+	if (end == value) {
+		log_error("Invalid value for --zoom: %s", value);
+		return;
+	}
+	double base = (value[0] == '+' || value[0] == '-') ? 1.0 : 0.0;
+	double target = max2(ps->o.zoom_min, min2(base + val, ps->o.zoom_max));
+	if (target == 1.0) {
+		return;
+	}
+	ps->zoom.start = 1.0;
+	ps->zoom.current = 1.0;
+	ps->zoom.target = target;
+	ps->zoom.start_time = timespec_ms(get_time_timespec());
+	ps->zoom.animating = true;
+	log_info("Applying initial zoom: %.3f", target);
+}
+
+static void zoom_socket_init(session_t *ps) {
+	zoom_make_socket_path(ps);
+
+	ps->zoom_socket_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (ps->zoom_socket_fd < 0) {
+		log_error("Failed to create zoom socket");
+		return;
+	}
+	struct sockaddr_un addr = {.sun_family = AF_UNIX};
+	size_t path_len = strlen(ps->zoom_socket_path);
+	if (path_len >= sizeof(addr.sun_path)) {
+		path_len = sizeof(addr.sun_path) - 1;
+	}
+	memcpy(addr.sun_path, ps->zoom_socket_path, path_len);
+	addr.sun_path[path_len] = '\0';
+
+	// If the bind fails because a stale socket file is left behind by a
+	// crashed instance, remove it and try once more.
+	if (bind(ps->zoom_socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 &&
+	    (errno != EADDRINUSE || unlink(ps->zoom_socket_path) < 0 ||
+	     bind(ps->zoom_socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)) {
+		log_error("Failed to bind zoom socket: %s", ps->zoom_socket_path);
+		close(ps->zoom_socket_fd);
+		ps->zoom_socket_fd = -1;
+		return;
+	}
+	fcntl(ps->zoom_socket_fd, F_SETFL, O_NONBLOCK);
+	ev_io_init(&ps->zoom_socket_watcher, zoom_socket_callback, ps->zoom_socket_fd, EV_READ);
+	ev_io_start(ps->loop, &ps->zoom_socket_watcher);
+
+	if (ps->o.zoom_ipc) {
+		zoom_apply_initial(ps, ps->o.zoom_ipc);
+	}
+}
+
+static void zoom_socket_cleanup(session_t *ps) {
+	if (ps->zoom_socket_fd >= 0) {
+		ev_io_stop(ps->loop, &ps->zoom_socket_watcher);
+		close(ps->zoom_socket_fd);
+		ps->zoom_socket_fd = -1;
+	}
+	if (ps->zoom_socket_path[0]) {
+		unlink(ps->zoom_socket_path);
+		ps->zoom_socket_path[0] = '\0';
+	}
+}
 
 // === Global variables ===
 
@@ -1615,6 +1858,9 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 	}
 	ps->fade_time = now_ms;
 
+	zoom_update(ps);
+	zoom_poll_pointer(ps);
+
 	draw_callback_enter_us = (now.tv_sec * 1000000LL + now.tv_nsec / 1000);
 	if (ps->next_render != 0) {
 		log_trace("Schedule delay: %" PRIi64 " us",
@@ -1751,7 +1997,8 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 		}
 		layout_manager_append_layout(
 		    ps->layout_manager, ps->wm, ps->root_image_generation,
-		    (ivec2){.width = ps->root_width, .height = ps->root_height});
+		    (ivec2){.width = ps->root_width, .height = ps->root_height},
+		    ps->zoom.current, ps->zoom.focal);
 		bool succeeded = renderer_render(
 		    ps->renderer, ps->backend_data, ps->root_image, &ps->root_image_extent,
 		    ps->layout_manager, ps->command_builder, ps->backend_blur_context,
@@ -1801,7 +2048,13 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 
 	// Queue redraw if animation is running. This should be picked up by next present
 	// event.
-	if (animation) {
+	bool zoom_needs_redraw = ps->zoom.animating ||
+	    (ps->zoom.current != 1.0 &&
+	     (ps->zoom.focal.x != ps->zoom.prev_focal.x ||
+	      ps->zoom.focal.y != ps->zoom.prev_focal.y));
+	ps->zoom.prev_focal = ps->zoom.focal;
+
+	if (animation || zoom_needs_redraw) {
 		queue_redraw(ps);
 	} else {
 		ps->fade_time = 0L;
@@ -2383,6 +2636,16 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 
 	write_pid(ps);
 
+	ps->zoom.current = 1.0;
+	ps->zoom.target = 1.0;
+	ps->zoom.start = 1.0;
+	ps->zoom.start_time = 0;
+	ps->zoom.animating = false;
+	ps->zoom.focal = (ivec2){.x = ps->root_width / 2, .y = ps->root_height / 2};
+	ps->zoom.prev_focal = ps->zoom.focal;
+	ps->zoom_socket_fd = -1;
+	zoom_socket_init(ps);
+
 	if (fork && stderr_logger) {
 		// Remove the stderr logger if we will fork
 		log_remove_target_tls(stderr_logger);
@@ -2406,6 +2669,8 @@ err:
  * @param ps session to destroy
  */
 static void session_destroy(session_t *ps) {
+	zoom_socket_cleanup(ps);
+
 	if (ps->redirected) {
 		unredirect(ps);
 	}
@@ -2555,6 +2820,11 @@ int PICOM_MAIN(int argc, char **argv) {
 	// Set locale so window names with special characters are interpreted
 	// correctly
 	setlocale(LC_ALL, "");
+
+	// If --zoom was given and a picom instance is already running (i.e. it
+	// owns the zoom socket), forward the command to it and exit. This runs
+	// before any config parsing, so no --config is needed for this.
+	zoom_client_mode_argv(argc, argv);
 
 	parse_debug_options(&global_debug_options);
 

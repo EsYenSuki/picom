@@ -218,6 +218,20 @@ typedef struct session {
 	// === DBus related ===
 	struct cdbus_data *dbus_data;
 #endif
+
+	// === Zoom ===
+	struct {
+		double current;
+		double target;
+		double start;
+		int64_t start_time;
+		bool animating;
+		ivec2 focal;
+		ivec2 prev_focal;
+	} zoom;
+	int zoom_socket_fd;
+	char zoom_socket_path[108];
+	ev_io zoom_socket_watcher;
 } session_t;
 
 struct wintype_info {

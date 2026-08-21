@@ -482,6 +482,11 @@ static bool xrender_blit(struct backend_base *base, ivec2 origin,
 		}
 
 		set_picture_scale(xd->base.c, tmp_pict, args->scale);
+		// Set bilinear filter for smooth scaling
+		if (!vec2_eq(args->scale, SCALE_IDENTITY)) {
+			xcb_render_set_picture_filter(xd->base.c->c, tmp_pict,
+			    to_u16_checked(strlen("bilinear")), "bilinear", 0, NULL);
+		}
 		// Transformations don't affect the picture's clip region, so we need to
 		// set it again
 		x_set_picture_clip_region(xd->base.c, tmp_pict, to_i16_checked(-origin.x),
@@ -491,16 +496,31 @@ static bool xrender_blit(struct backend_base *base, ivec2 origin,
 		                     mask_pict, target->pict, 0, 0, mask_pict_dst_x,
 		                     mask_pict_dst_y, to_i16_checked(origin.x),
 		                     to_i16_checked(origin.y), tmpew, tmpeh);
+		// Reset filter to nearest
+		if (!vec2_eq(args->scale, SCALE_IDENTITY)) {
+			xcb_render_set_picture_filter(xd->base.c->c, tmp_pict,
+			    to_u16_checked(strlen("nearest")), "nearest", 0, NULL);
+		}
 		xcb_render_free_picture(xd->base.c->c, tmp_pict);
 	} else {
 		uint8_t op = (has_alpha ? XCB_RENDER_PICT_OP_OVER : XCB_RENDER_PICT_OP_SRC);
 
 		set_picture_scale(xd->base.c, inner->pict, args->scale);
+		// Set bilinear filter for smooth scaling
+		if (!vec2_eq(args->scale, SCALE_IDENTITY)) {
+			xcb_render_set_picture_filter(xd->base.c->c, inner->pict,
+			    to_u16_checked(strlen("bilinear")), "bilinear", 0, NULL);
+		}
 
 		xcb_render_composite(xd->base.c->c, op, inner->pict, mask_pict,
 		                     target->pict, 0, 0, mask_pict_dst_x, mask_pict_dst_y,
 		                     to_i16_checked(origin.x), to_i16_checked(origin.y),
 		                     tmpew, tmpeh);
+		// Reset filter to nearest
+		if (!vec2_eq(args->scale, SCALE_IDENTITY)) {
+			xcb_render_set_picture_filter(xd->base.c->c, inner->pict,
+			    to_u16_checked(strlen("nearest")), "nearest", 0, NULL);
+		}
 		if (args->color_inverted) {
 			// Apply properties, if we reach here, then has_alpha == false
 			assert(!has_alpha);

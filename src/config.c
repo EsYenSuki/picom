@@ -711,6 +711,11 @@ bool parse_config(options_t *opt, const char *config_file) {
 	    .opacity_rules = NULL,
 	    .max_brightness = 1.0,
 
+	    .zoom_duration = 470,
+	    .zoom_bezier = {0.22, 1.3, 0.36, 1.0},
+	    .zoom_min = 1.0,
+	    .zoom_max = 5.0,
+
 	    .use_ewmh_active_win = false,
 	    .focus_blacklist = NULL,
 	    .detect_transient = false,

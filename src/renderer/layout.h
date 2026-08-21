@@ -84,8 +84,10 @@ struct layout_manager;
 /// the end of layout manager's ring buffer.  The layout manager has a ring buffer of
 /// layouts, with its size chosen at creation time. Calling this will push at new layout
 /// at the end of the ring buffer, and remove the oldest layout if the buffer is full.
+/// zoom_factor and zoom_focal control the zoom effect (1.0 = no zoom).
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
-                                  uint64_t root_pixmap_generation, ivec2 size);
+                                  uint64_t root_pixmap_generation, ivec2 size,
+                                  double zoom_factor, ivec2 zoom_focal);
 /// Get the layout `age` frames into the past. Age `0` is the most recently appended
 /// layout.
 struct layout *layout_manager_layout(struct layout_manager *lm, unsigned age);

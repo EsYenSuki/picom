@@ -40,7 +40,9 @@ struct layout_manager {
 
 /// Compute layout of a layer from a window. Returns false if the window is not
 /// visible / should not be rendered. `out_layer` is modified either way.
-static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size) {
+/// zoom_factor and zoom_focal apply zoom transform if not excluded.
+static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size,
+                              double zoom_factor, ivec2 zoom_focal) {
 	bool to_paint = false;
 	auto w_opts = win_options(w);
 	if (!w->ever_damaged || !w_opts.paint) {
@@ -89,6 +91,40 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 		out_layer->shadow.origin = (ivec2){};
 		out_layer->shadow.size = (ivec2){};
 		out_layer->shadow_scale = SCALE_IDENTITY;
+	}
+
+	// Apply zoom if not excluded
+	bool zoom_excluded = false;
+	if (zoom_factor != 1.0) {
+		// Check exclusion criteria (matching vcompmgr)
+		if (w->a.override_redirect) {
+			zoom_excluded = true;
+		} else if (w->is_fullscreen) {
+			zoom_excluded = true;
+		} else if (w->window_types & ((1 << WINTYPE_DOCK) | (1 << WINTYPE_TOOLBAR) |
+		                              (1 << WINTYPE_MENU) | (1 << WINTYPE_UTILITY) |
+		                              (1 << WINTYPE_SPLASH) | (1 << WINTYPE_DROPDOWN_MENU) |
+		                              (1 << WINTYPE_POPUP_MENU) | (1 << WINTYPE_TOOLTIP))) {
+			zoom_excluded = true;
+		}
+
+		if (!zoom_excluded) {
+			// Apply zoom: scale *= zoom, adjust origin so focal point stays fixed
+			out_layer->scale.x *= zoom_factor;
+			out_layer->scale.y *= zoom_factor;
+			// origin' = focal*(1-zoom) + origin*zoom
+			out_layer->window.origin.x = (int)(zoom_focal.x * (1.0 - zoom_factor) +
+			                                   out_layer->window.origin.x * zoom_factor);
+			out_layer->window.origin.y = (int)(zoom_focal.y * (1.0 - zoom_factor) +
+			                                   out_layer->window.origin.y * zoom_factor);
+			// Also scale shadow origin
+			out_layer->shadow.origin.x = (int)(zoom_focal.x * (1.0 - zoom_factor) +
+			                                   out_layer->shadow.origin.x * zoom_factor);
+			out_layer->shadow.origin.y = (int)(zoom_focal.y * (1.0 - zoom_factor) +
+			                                   out_layer->shadow.origin.y * zoom_factor);
+			out_layer->shadow_scale.x *= zoom_factor;
+			out_layer->shadow_scale.y *= zoom_factor;
+		}
 	}
 
 	struct ibox window_scaled = {
@@ -208,7 +244,8 @@ void layout_manager_free(struct layout_manager *lm) {
 //   above.
 
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
-                                  uint64_t root_pixmap_generation, ivec2 size) {
+                                  uint64_t root_pixmap_generation, ivec2 size,
+                                  double zoom_factor, ivec2 zoom_focal) {
 	auto prev_layout = &lm->layouts[lm->current];
 	lm->current = (lm->current + 1) % lm->max_buffer_age;
 	auto layout = &lm->layouts[lm->current];
@@ -224,7 +261,8 @@ void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
 			continue;
 		}
 		dynarr_resize(layout->layers, rank + 1, layer_init, layer_deinit);
-		if (!layer_from_window(&layout->layers[rank], (struct win *)w, size)) {
+		if (!layer_from_window(&layout->layers[rank], (struct win *)w, size,
+		                       zoom_factor, zoom_focal)) {
 			continue;
 		}
 
