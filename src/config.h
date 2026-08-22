@@ -437,6 +437,14 @@ typedef struct options {
 	double blur_deviation;
 	// Strength of the dual_kawase blur
 	int blur_strength;
+	int liquid_glass_strength;
+	int liquid_glass_distance;
+	double liquid_glass_offset;
+	double liquid_glass_zoom;
+	double liquid_glass_curve_x1;
+	double liquid_glass_curve_y1;
+	double liquid_glass_curve_x2;
+	double liquid_glass_curve_y2;
 	// Maximum displacement for noise
 	int blur_noise_radius;
 	// Size of noise features

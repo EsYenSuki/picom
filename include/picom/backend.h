@@ -80,6 +80,14 @@ struct dual_kawase_blur_args {
 	struct blur_args base;
 	int size;
 	int strength;
+	int liquid_glass_strength;
+	int liquid_glass_distance;
+	double liquid_glass_offset;
+	double liquid_glass_zoom;
+	double liquid_glass_curve_x1;
+	double liquid_glass_curve_y1;
+	double liquid_glass_curve_x2;
+	double liquid_glass_curve_y2;
 };
 
 typedef struct image_handle {

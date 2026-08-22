@@ -751,8 +751,17 @@ static bool initialize_blur(session_t *ps) {
 		args = (struct blur_args *)&gargs;
 		break;
 	case BLUR_METHOD_DUAL_KAWASE:
+	case BLUR_METHOD_LIQUID_GLASS:
 		dkargs.size = ps->o.blur_radius;
 		dkargs.strength = ps->o.blur_strength;
+		dkargs.liquid_glass_strength = ps->o.liquid_glass_strength;
+		dkargs.liquid_glass_distance = ps->o.liquid_glass_distance;
+		dkargs.liquid_glass_offset = ps->o.liquid_glass_offset;
+		dkargs.liquid_glass_zoom = ps->o.liquid_glass_zoom;
+		dkargs.liquid_glass_curve_x1 = ps->o.liquid_glass_curve_x1;
+		dkargs.liquid_glass_curve_y1 = ps->o.liquid_glass_curve_y1;
+		dkargs.liquid_glass_curve_x2 = ps->o.liquid_glass_curve_x2;
+		dkargs.liquid_glass_curve_y2 = ps->o.liquid_glass_curve_y2;
 		args = (struct blur_args *)&dkargs;
 		break;
 	default: return true;

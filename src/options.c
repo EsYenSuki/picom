@@ -521,6 +521,14 @@ static const struct picom_option picom_options[] = {
     [329] = {"blur-size"                   , INTEGER(blur_radius, 0, INT_MAX)               , "The radius of the blur kernel for 'box' and 'gaussian' blur method."},
     [330] = {"blur-deviation"              , FLOAT(blur_deviation, 0, INFINITY)             , "The standard deviation for the 'gaussian' blur method."},
     [331] = {"blur-strength"               , INTEGER(blur_strength, 0, INT_MAX)             , "The strength level of the 'dual_kawase' blur method."},
+    [345] = {"liquid-glass-strength"       , INTEGER(liquid_glass_strength, 0, INT_MAX)     , "Strength of liquid_glass edge stretching."},
+    [346] = {"liquid-glass-distance"       , INTEGER(liquid_glass_distance, 1, INT_MAX)     , "Distance from the edge over which liquid_glass stretching fades."},
+    [347] = {"liquid-glass-offset"         , FLOAT(liquid_glass_offset, 0, 1)              , "Skip the slow part of liquid_glass edge easing."},
+    [348] = {"liquid-glass-zoom"           , FLOAT(liquid_glass_zoom, 0, 1)                , "Inward zoom applied to liquid_glass sampling."},
+    [350] = {"liquid-glass-curve-x1"       , FLOAT(liquid_glass_curve_x1, -INFINITY, INFINITY), "First liquid_glass cubic-bezier X control point."},
+    [351] = {"liquid-glass-curve-y1"       , FLOAT(liquid_glass_curve_y1, -INFINITY, INFINITY), "First liquid_glass cubic-bezier Y control point."},
+    [352] = {"liquid-glass-curve-x2"       , FLOAT(liquid_glass_curve_x2, -INFINITY, INFINITY), "Second liquid_glass cubic-bezier X control point."},
+    [353] = {"liquid-glass-curve-y2"       , FLOAT(liquid_glass_curve_y2, -INFINITY, INFINITY), "Second liquid_glass cubic-bezier Y control point."},
     [343] = {"blur-noise-radius"           , INTEGER(blur_noise_radius, 0, INT_MAX)         , "Maximum displacement for noise."},
     [344] = {"blur-noise-scale"            , FLOAT(blur_noise_scale, 0, INFINITY)           , "Size of noise features."},
     [333] = {"corner-radius"               , INTEGER(corner_radius, 0, INT_MAX)             , "Sets the radius of rounded window corners. When > 0, the compositor will "
@@ -853,7 +861,8 @@ static bool sanitize_options(struct options *opt) {
 	}
 
 	// Sanitize parameters for dual-filter kawase blur
-	if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE) {
+	if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE ||
+	    opt->blur_method == BLUR_METHOD_LIQUID_GLASS) {
 		if (opt->blur_strength <= 0 && opt->blur_radius > 500) {
 			log_warn("Blur radius >500 not supported by dual_kawase "
 			         "method, "

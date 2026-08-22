@@ -920,7 +920,7 @@ Available options of the _blur_ section are: ::
 
   *method*:::
     A string. Controls the blur method. Corresponds to the *--blur-method* command line option. Available choices are:
-      _none_ to disable blurring; _gaussian_ for gaussian blur; _box_ for box blur; _kernel_ for convolution blur with a custom kernel; _dual_kawase_ for dual-filter kawase blur.
+      _none_ to disable blurring; _gaussian_ for gaussian blur; _box_ for box blur; _kernel_ for convolution blur with a custom kernel; _dual_kawase_ for dual-filter kawase blur; _liquid_glass_ for dual-filter kawase blur with corner-weighted background stretching.
     (default: none)
 
   *size*:::
@@ -931,6 +931,22 @@ Available options of the _blur_ section are: ::
 
   *strength*:::
     An integer in the range 0-20. The strength of the _dual_kawase_ blur method. Corresponds to the *--blur-strength* command line option. If set to zero, the value requested by *--blur-size* is approximated (default: 5).
+
+  *liquid-glass-strength*:::
+    An integer. The strength, in pixels, of edge stretching applied by the _liquid_glass_ blur method (default: 18).
+
+  *liquid-glass-distance*:::
+    An integer. The distance, in pixels, from the window edge over which _liquid_glass_ stretching fades toward the center (default: 36).
+
+  *liquid-glass-offset*:::
+    A floating point number from 0 to 1. Shifts the easing curve toward the edge to reduce its slow section (default: 0.25).
+
+  *liquid-glass-zoom*:::
+    A floating point number from 0 to 1. Inward zoom applied before edge stretching; lower values hide more of the slow section and protect the window boundary (default: 0.96).
+
+  *liquid-glass-curve-x1*, *liquid-glass-curve-y1*, *liquid-glass-curve-x2*, *liquid-glass-curve-y2*:::
+    Floating point cubic-bezier control points for the liquid glass edge easing curve. Together these define `cubic-bezier(x1, y1, x2, y2)` (defaults: `1.0, 0.3, 1.0, 0.3`).
+
 
   *kernel*:::
     A string. The kernel to use for the _kernel_ blur method, specified in the same format as the *--blur-kern* option. Corresponds to the *--blur-kern* command line option.

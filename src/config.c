@@ -185,6 +185,9 @@ int parse_blur_method(const char *src) {
 	if (strcmp(src, "dual_kawase") == 0) {
 		return BLUR_METHOD_DUAL_KAWASE;
 	}
+	if (strcmp(src, "liquid_glass") == 0) {
+		return BLUR_METHOD_LIQUID_GLASS;
+	}
 	if (strcmp(src, "gaussian") == 0) {
 		return BLUR_METHOD_GAUSSIAN;
 	}
@@ -696,6 +699,14 @@ bool parse_config(options_t *opt, const char *config_file) {
 	    .blur_radius = 3,
 	    .blur_deviation = 0.84089642,
 	    .blur_strength = 5,
+	    .liquid_glass_strength = 18,
+	    .liquid_glass_distance = 36,
+	    .liquid_glass_offset = 0.25,
+	    .liquid_glass_zoom = 0.96,
+	    .liquid_glass_curve_x1 = 1.0,
+	    .liquid_glass_curve_y1 = 0.3,
+	    .liquid_glass_curve_x2 = 1.0,
+	    .liquid_glass_curve_y2 = 0.3,
 	    .blur_noise_radius = 0,
 	    .blur_noise_scale = 0.005,
 	    .blur_background_frame = false,

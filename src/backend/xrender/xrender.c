@@ -880,9 +880,9 @@ static void *xrender_create_blur_context(backend_t *base attr_unused, enum blur_
 		ret->method = BLUR_METHOD_NONE;
 		return ret;
 	}
-	if (method == BLUR_METHOD_DUAL_KAWASE) {
-		log_warn("Blur method 'dual_kawase' is not compatible with the 'xrender' "
-		         "backend.");
+	if (method == BLUR_METHOD_DUAL_KAWASE || method == BLUR_METHOD_LIQUID_GLASS) {
+		log_warn("Blur method '%s' is not compatible with the 'xrender' backend.",
+		         method == BLUR_METHOD_LIQUID_GLASS ? "liquid_glass" : "dual_kawase");
 		ret->method = BLUR_METHOD_NONE;
 		return ret;
 	}

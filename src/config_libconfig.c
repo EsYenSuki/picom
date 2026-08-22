@@ -1281,6 +1281,14 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 
 		config_setting_lookup_int(blur_cfg, "noise-radius", &opt->blur_noise_radius);
 		config_setting_lookup_float(blur_cfg, "noise-scale", &opt->blur_noise_scale);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-strength", &opt->liquid_glass_strength);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-distance", &opt->liquid_glass_distance);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-offset", &opt->liquid_glass_offset);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom", &opt->liquid_glass_zoom);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-x1", &opt->liquid_glass_curve_x1);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-y1", &opt->liquid_glass_curve_y1);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-x2", &opt->liquid_glass_curve_x2);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-y2", &opt->liquid_glass_curve_y2);
 	}
 
 	// --write-pid-path
