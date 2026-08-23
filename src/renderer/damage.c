@@ -121,7 +121,10 @@ command_blit_damage(region_t *damage, region_t *scratch_region, struct backend_c
 static inline void command_blur_damage(region_t *damage, region_t *scratch_region,
                                        struct backend_command *cmd1,
                                        struct backend_command *cmd2, ivec2 blur_size) {
-	if (cmd1->blur.opacity != cmd2->blur.opacity) {
+	if (cmd1->blur.opacity != cmd2->blur.opacity ||
+	    cmd1->blur.liquid_glass_strength != cmd2->blur.liquid_glass_strength ||
+	    cmd1->blur.liquid_glass_distance != cmd2->blur.liquid_glass_distance ||
+	    cmd1->blur.liquid_glass_zoom != cmd2->blur.liquid_glass_zoom) {
 		pixman_region32_union(damage, damage, &cmd1->target_mask);
 		pixman_region32_union(damage, damage, &cmd2->target_mask);
 		return;

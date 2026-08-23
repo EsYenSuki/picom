@@ -932,20 +932,23 @@ Available options of the _blur_ section are: ::
   *strength*:::
     An integer in the range 0-20. The strength of the _dual_kawase_ blur method. Corresponds to the *--blur-strength* command line option. If set to zero, the value requested by *--blur-size* is approximated (default: 5).
 
-  *liquid-glass-strength*:::
-    An integer. The strength, in pixels, of edge stretching applied by the _liquid_glass_ blur method (default: 18).
+  *liquid-glass-strength-focus*, *liquid-glass-strength-unfocus*:::
+    Integers. The strength, in pixels, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Transitions between the two values are animated (default: 100 / 50).
 
-  *liquid-glass-distance*:::
-    An integer. The distance, in pixels, from the window edge over which _liquid_glass_ stretching fades toward the center (default: 36).
+  *liquid-glass-distance-focus*, *liquid-glass-distance-unfocus*:::
+    Integers. The distance, in pixels, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Transitions between the two values are animated (default: 100 / 50).
 
-  *liquid-glass-offset*:::
-    A floating point number from 0 to 1. Shifts the easing curve toward the edge to reduce its slow section (default: 0.25).
+  *liquid-glass-transition-duration*:::
+    An integer. Duration of the focus/unfocus transition of the liquid glass parameters, in milliseconds (default: 200).
 
-  *liquid-glass-zoom*:::
-    A floating point number from 0 to 1. Inward zoom applied before edge stretching; lower values hide more of the slow section and protect the window boundary (default: 0.96).
+  *liquid-glass-transition-curve*:::
+    Cubic-bezier easing of the focus/unfocus liquid glass transition, as an array or comma-separated list `x1, y1, x2, y2` (default: `0.5, 0.0, 0.5, 1.0`).
 
-  *liquid-glass-curve-x1*, *liquid-glass-curve-y1*, *liquid-glass-curve-x2*, *liquid-glass-curve-y2*:::
-    Floating point cubic-bezier control points for the liquid glass edge easing curve. Together these define `cubic-bezier(x1, y1, x2, y2)` (defaults: `1.0, 0.3, 1.0, 0.3`).
+  *liquid-glass-zoom-focus*, *liquid-glass-zoom-unfocus*:::
+    Floating point numbers from 0 to 1. Inward zoom applied before edge stretching; lower values hide more of the slow section and protect the window boundary. Transitions between the two values are animated (default: 0.96 / 0.98).
+
+  *liquid-glass-curve*:::
+    Floating point cubic-bezier control points for the liquid glass edge easing curve, as an array or comma-separated list `x1, y1, x2, y2`, i.e. `cubic-bezier(x1, y1, x2, y2)` (default: `1.0, 0.1, 1.0, 0.1`).
 
 
   *kernel*:::

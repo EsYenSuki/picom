@@ -754,14 +754,12 @@ static bool initialize_blur(session_t *ps) {
 	case BLUR_METHOD_LIQUID_GLASS:
 		dkargs.size = ps->o.blur_radius;
 		dkargs.strength = ps->o.blur_strength;
-		dkargs.liquid_glass_strength = ps->o.liquid_glass_strength;
-		dkargs.liquid_glass_distance = ps->o.liquid_glass_distance;
-		dkargs.liquid_glass_offset = ps->o.liquid_glass_offset;
-		dkargs.liquid_glass_zoom = ps->o.liquid_glass_zoom;
-		dkargs.liquid_glass_curve_x1 = ps->o.liquid_glass_curve_x1;
-		dkargs.liquid_glass_curve_y1 = ps->o.liquid_glass_curve_y1;
-		dkargs.liquid_glass_curve_x2 = ps->o.liquid_glass_curve_x2;
-		dkargs.liquid_glass_curve_y2 = ps->o.liquid_glass_curve_y2;
+		dkargs.liquid_glass_strength =
+		    max2(ps->o.liquid_glass_strength_focus, ps->o.liquid_glass_strength_unfocus);
+		dkargs.liquid_glass_distance =
+		    max2(ps->o.liquid_glass_distance_focus, ps->o.liquid_glass_distance_unfocus);
+		memcpy(dkargs.liquid_glass_curve, ps->o.liquid_glass_curve,
+		       sizeof(dkargs.liquid_glass_curve));
 		args = (struct blur_args *)&dkargs;
 		break;
 	default: return true;
@@ -932,7 +930,7 @@ static bool paint_preprocess(session_t *ps, bool *animation, struct win **out_bo
 			continue;
 		}
 
-		if (w->running_animation_instance != NULL) {
+		if (w->running_animation_instance != NULL || w->glass.transitioning) {
 			*animation = true;
 		}
 
@@ -1783,17 +1781,20 @@ static void handle_pending_updates(struct session *ps, double delta_t) {
 		BUG_ON(w != NULL && w->tree_ref != cursor);
 		// Window might be freed by this function, if it's destroyed and its
 		// animation finished
-		if (w != NULL && win_process_animation_and_state_change(ps, w, delta_t)) {
-			free(w->running_animation_instance);
-			w->running_animation_instance = NULL;
-			w->in_openclose = false;
-			if (w->saved_win_image != NULL) {
-				win_release_saved_win_image(ps->backend_data, w);
-			}
-			if (w->state == WSTATE_UNMAPPED) {
-				unmap_win_finish(ps, w);
-			} else if (w->state == WSTATE_DESTROYED) {
-				win_destroy_finish(ps, w);
+		if (w != NULL) {
+			win_update_liquid_glass(ps, w, delta_t);
+			if (win_process_animation_and_state_change(ps, w, delta_t)) {
+				free(w->running_animation_instance);
+				w->running_animation_instance = NULL;
+				w->in_openclose = false;
+				if (w->saved_win_image != NULL) {
+					win_release_saved_win_image(ps->backend_data, w);
+				}
+				if (w->state == WSTATE_UNMAPPED) {
+					unmap_win_finish(ps, w);
+				} else if (w->state == WSTATE_DESTROYED) {
+					win_destroy_finish(ps, w);
+				}
 			}
 		}
 	}

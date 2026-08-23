@@ -827,6 +827,33 @@ resolve_include(config_t *cfg, const char *include_dir, const char *path, const 
 	return ret;
 }
 
+/// Parse a cubic-bezier curve (4 control point coordinates) from a config
+/// setting. The setting can either be an array of 4 numbers, or a string of 4
+/// comma-separated numbers, e.g. `"1.0,0.1,1.0,0.1"`.
+static void parse_bezier4_setting(config_setting_t *parent, const char *name,
+                                  double out[4]) {
+	config_setting_t *setting = config_setting_lookup(parent, name);
+	if (setting == NULL) {
+		return;
+	}
+	if (config_setting_is_array(setting)) {
+		for (int i = 0; i < 4 && i < config_setting_length(setting); i++) {
+			out[i] = config_setting_get_float_elem(setting, i);
+		}
+		return;
+	}
+	if (config_setting_is_scalar(setting) &&
+	    config_setting_type(setting) == CONFIG_TYPE_STRING) {
+		const char *strval = config_setting_get_string(setting);
+		if (sscanf(strval, "%lf,%lf,%lf,%lf", &out[0], &out[1], &out[2],
+		           &out[3]) != 4) {
+			log_warn("Invalid cubic-bezier curve in `%s`, must be 4 "
+			         "comma-separated numbers: %s",
+			         name, strval);
+		}
+	}
+}
+
 bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(readability-function-cognitive-complexity)*/
 	char *path = NULL;
 	FILE *f;
@@ -1281,14 +1308,17 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 
 		config_setting_lookup_int(blur_cfg, "noise-radius", &opt->blur_noise_radius);
 		config_setting_lookup_float(blur_cfg, "noise-scale", &opt->blur_noise_scale);
-		config_setting_lookup_int(blur_cfg, "liquid-glass-strength", &opt->liquid_glass_strength);
-		config_setting_lookup_int(blur_cfg, "liquid-glass-distance", &opt->liquid_glass_distance);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-offset", &opt->liquid_glass_offset);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom", &opt->liquid_glass_zoom);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-x1", &opt->liquid_glass_curve_x1);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-y1", &opt->liquid_glass_curve_y1);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-x2", &opt->liquid_glass_curve_x2);
-		config_setting_lookup_float(blur_cfg, "liquid-glass-curve-y2", &opt->liquid_glass_curve_y2);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-strength-focus", &opt->liquid_glass_strength_focus);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-strength-unfocus", &opt->liquid_glass_strength_unfocus);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-focus", &opt->liquid_glass_distance_focus);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-unfocus", &opt->liquid_glass_distance_unfocus);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-focus", &opt->liquid_glass_zoom_focus);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-unfocus", &opt->liquid_glass_zoom_unfocus);
+		parse_bezier4_setting(blur_cfg, "liquid-glass-curve", opt->liquid_glass_curve);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-transition-duration",
+		                          &opt->liquid_glass_transition_duration);
+		parse_bezier4_setting(blur_cfg, "liquid-glass-transition-curve",
+		                      opt->liquid_glass_transition_curve);
 	}
 
 	// --write-pid-path

@@ -232,6 +232,24 @@ struct win {
 	struct script_instance *running_animation_instance;
 	struct win_script running_animation;
 
+	/// Liquid glass focus/unfocus transition state
+	struct {
+		/// Current (animated) strength, distance, and zoom of the liquid
+		/// glass effect for this window.
+		double strength, distance, zoom;
+		/// Strength, distance, and zoom when the current transition started.
+		double strength_from, distance_from, zoom_from;
+		/// Elapsed time of the current transition, in milliseconds.
+		int64_t elapsed;
+		/// Whether the current transition is heading toward the focused
+		/// variant.
+		bool focused_target;
+		/// Whether `strength`/`distance` have been initialized.
+		bool initialized;
+		/// Whether a focus/unfocus transition is currently running.
+		bool transitioning;
+	} glass;
+
 	/// Number of times each animation trigger is blocked
 	unsigned int animation_block[ANIMATION_TRIGGER_COUNT];
 };
@@ -407,6 +425,11 @@ static inline bool win_position_changed(struct win_geometry a, struct win_geomet
 /// or if the window's states just changed and there is no animation defined for this
 /// state change.
 bool win_process_animation_and_state_change(struct session *ps, struct win *w, double delta_t);
+/// Update the per-window liquid glass parameters, transitioning them between
+/// their focused and unfocused variants when the window's focus state changes.
+///
+/// Returns true if a transition is still running.
+bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t);
 double win_animatable_get(const struct win *w, enum win_script_output output);
 void win_process_primary_flags(session_t *ps, struct win *w);
 void win_process_secondary_flags(session_t *ps, struct win *w);

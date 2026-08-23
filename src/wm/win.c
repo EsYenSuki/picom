@@ -33,6 +33,7 @@
 #include "x.h"
 
 #include "defs.h"
+#include "transition/curve.h"
 #include "wm.h"
 
 #include "win.h"
@@ -1676,6 +1677,71 @@ double win_animatable_get(const struct win *w, enum win_script_output output) {
 	default: unreachable();
 	}
 	unreachable();
+}
+
+/// Update the per-window liquid glass parameters, transitioning them between
+/// their focused and unfocused variants when the window's focus state changes.
+///
+/// Returns true if a transition is still running.
+bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) {
+	const auto o = &ps->o;
+	auto target_strength = w->is_focused ? (double)o->liquid_glass_strength_focus
+	                                     : (double)o->liquid_glass_strength_unfocus;
+	auto target_distance = w->is_focused ? (double)o->liquid_glass_distance_focus
+	                                     : (double)o->liquid_glass_distance_unfocus;
+	auto target_zoom =
+	    w->is_focused ? o->liquid_glass_zoom_focus : o->liquid_glass_zoom_unfocus;
+
+	if (!w->glass.initialized) {
+		w->glass.strength = target_strength;
+		w->glass.distance = target_distance;
+		w->glass.zoom = target_zoom;
+		w->glass.focused_target = w->is_focused;
+		w->glass.elapsed = 0;
+		w->glass.initialized = true;
+		w->glass.transitioning = false;
+		return false;
+	}
+
+	if (w->is_focused != w->glass.focused_target) {
+		// Focus changed, start a new transition from where we are now
+		w->glass.strength_from = w->glass.strength;
+		w->glass.distance_from = w->glass.distance;
+		w->glass.zoom_from = w->glass.zoom;
+		w->glass.focused_target = w->is_focused;
+		w->glass.elapsed = 0;
+	}
+
+	if (w->glass.elapsed >= o->liquid_glass_transition_duration) {
+		w->glass.strength = target_strength;
+		w->glass.distance = target_distance;
+		w->glass.zoom = target_zoom;
+		w->glass.transitioning = false;
+		return false;
+	}
+
+	bool still_running = true;
+	w->glass.elapsed += (int64_t)(delta_t * 1000);
+	double tp = o->liquid_glass_transition_duration > 0
+	                ? (double)w->glass.elapsed / (double)o->liquid_glass_transition_duration
+	                : 1.0;
+	if (tp >= 1.0) {
+		tp = 1.0;
+		still_running = false;
+	} else if (tp < 0.0) {
+		tp = 0.0;
+	}
+	auto ease = curve_new_cubic_bezier(
+	    o->liquid_glass_transition_curve[0], o->liquid_glass_transition_curve[1],
+	    o->liquid_glass_transition_curve[2], o->liquid_glass_transition_curve[3]);
+	double progress = curve_sample(&ease, tp);
+	w->glass.strength =
+	    w->glass.strength_from + (target_strength - w->glass.strength_from) * progress;
+	w->glass.distance =
+	    w->glass.distance_from + (target_distance - w->glass.distance_from) * progress;
+	w->glass.zoom = w->glass.zoom_from + (target_zoom - w->glass.zoom_from) * progress;
+	w->glass.transitioning = still_running;
+	return still_running;
 }
 
 #define WSTATE_PAIR(a, b) ((int)(a) * NUM_OF_WSTATES + (int)(b))

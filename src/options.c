@@ -521,14 +521,20 @@ static const struct picom_option picom_options[] = {
     [329] = {"blur-size"                   , INTEGER(blur_radius, 0, INT_MAX)               , "The radius of the blur kernel for 'box' and 'gaussian' blur method."},
     [330] = {"blur-deviation"              , FLOAT(blur_deviation, 0, INFINITY)             , "The standard deviation for the 'gaussian' blur method."},
     [331] = {"blur-strength"               , INTEGER(blur_strength, 0, INT_MAX)             , "The strength level of the 'dual_kawase' blur method."},
-    [345] = {"liquid-glass-strength"       , INTEGER(liquid_glass_strength, 0, INT_MAX)     , "Strength of liquid_glass edge stretching."},
-    [346] = {"liquid-glass-distance"       , INTEGER(liquid_glass_distance, 1, INT_MAX)     , "Distance from the edge over which liquid_glass stretching fades."},
-    [347] = {"liquid-glass-offset"         , FLOAT(liquid_glass_offset, 0, 1)              , "Skip the slow part of liquid_glass edge easing."},
-    [348] = {"liquid-glass-zoom"           , FLOAT(liquid_glass_zoom, 0, 1)                , "Inward zoom applied to liquid_glass sampling."},
-    [350] = {"liquid-glass-curve-x1"       , FLOAT(liquid_glass_curve_x1, -INFINITY, INFINITY), "First liquid_glass cubic-bezier X control point."},
-    [351] = {"liquid-glass-curve-y1"       , FLOAT(liquid_glass_curve_y1, -INFINITY, INFINITY), "First liquid_glass cubic-bezier Y control point."},
-    [352] = {"liquid-glass-curve-x2"       , FLOAT(liquid_glass_curve_x2, -INFINITY, INFINITY), "Second liquid_glass cubic-bezier X control point."},
-    [353] = {"liquid-glass-curve-y2"       , FLOAT(liquid_glass_curve_y2, -INFINITY, INFINITY), "Second liquid_glass cubic-bezier Y control point."},
+    [345] = {"liquid-glass-strength-focus" , INTEGER(liquid_glass_strength_focus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is focused."},
+    [346] = {"liquid-glass-strength-unfocus", INTEGER(liquid_glass_strength_unfocus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is not focused."},
+    [347] = {"liquid-glass-zoom-focus"    , FLOAT(liquid_glass_zoom_focus, 0, 1)         , "Inward zoom applied to liquid_glass sampling when the window is focused."},
+    [348] = {"liquid-glass-zoom-unfocus"  , FLOAT(liquid_glass_zoom_unfocus, 0, 1)       , "Inward zoom applied to liquid_glass sampling when the window is not focused."},
+    [350] = {"liquid-glass-distance-focus" , INTEGER(liquid_glass_distance_focus, 1, INT_MAX), "Distance from the edge over which liquid_glass stretching fades when the "
+                                                                                              "window is focused."},
+    [351] = {"liquid-glass-distance-unfocus", INTEGER(liquid_glass_distance_unfocus, 1, INT_MAX), "Distance from the edge over which liquid_glass stretching fades when the "
+                                                                                               "window is not focused."},
+    [352] = {"liquid-glass-transition-duration", INTEGER(liquid_glass_transition_duration, 0, INT_MAX), "Duration of the focus <-> unfocus transition of liquid_glass parameters, in "
+                                                                                                   "milliseconds. (default: 200)"},
+    [353] = {"liquid-glass-curve"          , required_argument, {.offset = offsetof(options_t, liquid_glass_curve), .handler = store_zoom_bezier}, "Liquid_glass edge easing cubic-bezier control points as x1,y1,x2,y2. (default "
+                                                                                                                                                  "1.0,0.1,1.0,0.1)"},
+    [349] = {"liquid-glass-transition-curve", required_argument, {.offset = offsetof(options_t, liquid_glass_transition_curve), .handler = store_zoom_bezier}, "Cubic-bezier easing of the focus <-> unfocus liquid_glass transition, as "
+                                                                                                                                                        "x1,y1,x2,y2. (default 0.5,0.0,0.5,1.0)"},
     [343] = {"blur-noise-radius"           , INTEGER(blur_noise_radius, 0, INT_MAX)         , "Maximum displacement for noise."},
     [344] = {"blur-noise-scale"            , FLOAT(blur_noise_scale, 0, INFINITY)           , "Size of noise features."},
     [333] = {"corner-radius"               , INTEGER(corner_radius, 0, INT_MAX)             , "Sets the radius of rounded window corners. When > 0, the compositor will "

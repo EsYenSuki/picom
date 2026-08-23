@@ -437,14 +437,20 @@ typedef struct options {
 	double blur_deviation;
 	// Strength of the dual_kawase blur
 	int blur_strength;
-	int liquid_glass_strength;
-	int liquid_glass_distance;
-	double liquid_glass_offset;
-	double liquid_glass_zoom;
-	double liquid_glass_curve_x1;
-	double liquid_glass_curve_y1;
-	double liquid_glass_curve_x2;
-	double liquid_glass_curve_y2;
+	int liquid_glass_strength_focus;
+	int liquid_glass_strength_unfocus;
+	int liquid_glass_distance_focus;
+	int liquid_glass_distance_unfocus;
+	double liquid_glass_zoom_focus;
+	double liquid_glass_zoom_unfocus;
+	/// Edge easing curve of the liquid glass effect, cubic-bezier control
+	/// points x1, y1, x2, y2.
+	double liquid_glass_curve[4];
+	/// Duration of the focus <-> unfocus transition, in milliseconds.
+	int liquid_glass_transition_duration;
+	/// Easing curve for the focus <-> unfocus transition, cubic-bezier
+	/// control points x1, y1, x2, y2.
+	double liquid_glass_transition_curve[4];
 	// Maximum displacement for noise
 	int blur_noise_radius;
 	// Size of noise features

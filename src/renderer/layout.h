@@ -36,6 +36,12 @@ struct layer {
 	float opacity;
 	/// Opacity of the background blur of this window
 	float blur_opacity;
+	/// Strength of the liquid glass effect of this window
+	float glass_strength;
+	/// Edge distance of the liquid glass effect of this window
+	float glass_distance;
+	/// Inward zoom of the liquid glass effect of this window
+	float glass_zoom;
 	/// Color of this window's shadow, alpha is shadow opacity
 	struct color shadow_color;
 	/// How much the image of this window should be blended with the saved image

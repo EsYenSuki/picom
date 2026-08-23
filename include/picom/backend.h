@@ -80,14 +80,11 @@ struct dual_kawase_blur_args {
 	struct blur_args base;
 	int size;
 	int strength;
+	/// Maximum of the focused/unfocused liquid glass strengths. Only used
+	/// for sizing damage regions.
 	int liquid_glass_strength;
 	int liquid_glass_distance;
-	double liquid_glass_offset;
-	double liquid_glass_zoom;
-	double liquid_glass_curve_x1;
-	double liquid_glass_curve_y1;
-	double liquid_glass_curve_x2;
-	double liquid_glass_curve_y2;
+	double liquid_glass_curve[4];
 };
 
 typedef struct image_handle {
@@ -134,6 +131,12 @@ struct backend_blur_args {
 	image_handle source_image;
 	/// Opacity of the blurred image
 	double opacity;
+	/// Strength of the liquid glass edge stretching for this draw
+	int liquid_glass_strength;
+	/// Distance over which the liquid glass stretching fades for this draw
+	int liquid_glass_distance;
+	/// Inward zoom applied to the liquid glass sampling for this draw
+	double liquid_glass_zoom;
 };
 
 struct backend_blit_args {

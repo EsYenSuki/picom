@@ -39,14 +39,11 @@ struct gl_blur_context {
 
 	int noise_radius;
 	float noise_scale;
+	/// Maximum of the focused/unfocused liquid glass strengths, used for
+	/// sizing damage regions.
 	int liquid_glass_strength;
 	int liquid_glass_distance;
-	float liquid_glass_offset;
-	float liquid_glass_zoom;
-	float liquid_glass_curve_x1;
-	float liquid_glass_curve_y1;
-	float liquid_glass_curve_x2;
-	float liquid_glass_curve_y2;
+	float liquid_glass_curve[4];
 
 	int npasses;
 
@@ -169,10 +166,12 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 /// @param vao two vertex array objects.
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
-bool gl_dual_kawase_blur(double opacity, struct gl_blur_context *bctx,
+bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
+                         float glass_zoom, struct gl_blur_context *bctx,
                          const struct backend_mask_image *mask, vec2 mask_scale,
-                         const GLuint vao[2], const int vao_nelems[2], struct gl_texture *source,
-                         GLuint blur_sampler, GLuint target_fbo, GLuint default_mask) {
+                         const GLuint vao[2], const int vao_nelems[2],
+                         struct gl_texture *source, GLuint blur_sampler, GLuint target_fbo,
+                         GLuint default_mask) {
 	int iterations = bctx->blur_texture_count;
 	int scale_factor = 1;
 
@@ -286,14 +285,13 @@ bool gl_dual_kawase_blur(double opacity, struct gl_blur_context *bctx,
 			glUniform1f(UNIFORM_OPACITY_LOC, (GLfloat)opacity);
 			glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
 			glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
-			glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, bctx->liquid_glass_strength);
-			glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, bctx->liquid_glass_distance);
-			glUniform1f(UNIFORM_LIQUID_GLASS_OFFSET_LOC, bctx->liquid_glass_offset);
-			glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, bctx->liquid_glass_zoom);
-			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X1_LOC, bctx->liquid_glass_curve_x1);
-			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC, bctx->liquid_glass_curve_y1);
-			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X2_LOC, bctx->liquid_glass_curve_x2);
-			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y2_LOC, bctx->liquid_glass_curve_y2);
+			glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
+			glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
+			glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
+			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X1_LOC, bctx->liquid_glass_curve[0]);
+			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC, bctx->liquid_glass_curve[1]);
+			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X2_LOC, bctx->liquid_glass_curve[2]);
+			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y2_LOC, bctx->liquid_glass_curve[3]);
 			glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		}
 
@@ -446,8 +444,9 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	if (bctx->method == BLUR_METHOD_DUAL_KAWASE ||
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
-		    args->opacity, bctx, args->source_mask, args->source_mask_scale,
-		    gd->vertex_array_objects, vao_nelems, source,
+		    args->opacity, args->liquid_glass_strength, args->liquid_glass_distance,
+		    (float)args->liquid_glass_zoom, bctx, args->source_mask,
+		    args->source_mask_scale, gd->vertex_array_objects, vao_nelems, source,
 		    gd->samplers[GL_SAMPLER_BLUR], target_fbo, gd->default_mask_texture);
 	} else {
 		ret = gl_kernel_blur(args->opacity, bctx, args->source_mask,
@@ -823,8 +822,6 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform int liquid_glass_strength;
 			layout(location = UNIFORM_LIQUID_GLASS_DISTANCE_LOC)
 			uniform int liquid_glass_distance;
-			layout(location = UNIFORM_LIQUID_GLASS_OFFSET_LOC)
-			uniform float liquid_glass_offset;
 			layout(location = UNIFORM_LIQUID_GLASS_ZOOM_LOC)
 			uniform float liquid_glass_zoom;
 			layout(location = UNIFORM_LIQUID_GLASS_CURVE_X1_LOC)
@@ -910,11 +907,11 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                  "float horizontal_progress = smoothstep(0.0, side_cut, overstep.x);\n"
                                  "float vertical_progress = smoothstep(0.0, side_cut, overstep.y);\n"
 
-                                 "horizontal_progress = liquid_glass_bezier(clamp(horizontal_progress * (1.0 + liquid_glass_offset) - liquid_glass_offset, 0.0, 1.0));\n"
-                                 "vertical_progress = liquid_glass_bezier(clamp(vertical_progress * (1.0 + liquid_glass_offset) - liquid_glass_offset, 0.0, 1.0));\n"
+                                 "horizontal_progress = liquid_glass_bezier(clamp(horizontal_progress, 0.0, 1.0));\n"
+                                 "vertical_progress = liquid_glass_bezier(clamp(vertical_progress, 0.0, 1.0));\n"
 
                                  "float corner_progress = smoothstep(0.0, edge_width * 1, min(corner_overstep.x, corner_overstep.y));\n"
-                                 "corner_progress = liquid_glass_bezier(clamp(corner_progress * (1.0 + liquid_glass_offset) - liquid_glass_offset, 0.0, 1.0));\n"
+                                 "corner_progress = liquid_glass_bezier(clamp(corner_progress, 0.0, 1.0));\n"
 
                                  "vec2 horizontal_direction = vec2(-sign(centered.x), 0.0);\n"
                                  "vec2 vertical_direction = vec2(0.0, -sign(centered.y));\n"
@@ -1002,12 +999,9 @@ void *gl_create_blur_context(backend_t *base, enum blur_method method,
 		auto glass_args = (struct dual_kawase_blur_args *)args;
 		ctx->liquid_glass_strength = glass_args->liquid_glass_strength;
 		ctx->liquid_glass_distance = glass_args->liquid_glass_distance;
-		ctx->liquid_glass_offset = (float)glass_args->liquid_glass_offset;
-		ctx->liquid_glass_zoom = (float)glass_args->liquid_glass_zoom;
-		ctx->liquid_glass_curve_x1 = (float)glass_args->liquid_glass_curve_x1;
-		ctx->liquid_glass_curve_y1 = (float)glass_args->liquid_glass_curve_y1;
-		ctx->liquid_glass_curve_x2 = (float)glass_args->liquid_glass_curve_x2;
-		ctx->liquid_glass_curve_y2 = (float)glass_args->liquid_glass_curve_y2;
+		for (int i = 0; i < 4; i++) {
+			ctx->liquid_glass_curve[i] = (float)glass_args->liquid_glass_curve[i];
+		}
 		ctx->resize_width = max2(ctx->resize_width, ctx->liquid_glass_strength);
 		ctx->resize_height = max2(ctx->resize_height, ctx->liquid_glass_strength);
 	}
