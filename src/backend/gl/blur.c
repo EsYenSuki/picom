@@ -167,7 +167,8 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
 bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
-                         float glass_zoom, struct gl_blur_context *bctx,
+                         float glass_zoom, vec2 glass_anchor,
+                         bool glass_zoom_follow_mouse, struct gl_blur_context *bctx,
                          const struct backend_mask_image *mask, vec2 mask_scale,
                          const GLuint vao[2], const int vao_nelems[2],
                          struct gl_texture *source, GLuint blur_sampler, GLuint target_fbo,
@@ -240,6 +241,8 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 		// The liquid-glass shader is reused for intermediate upsample passes.
 		// Keep its zoom neutral until the final compositing pass below.
 		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, 1.0F);
+		glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC, 0);
+		glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, 0.0F, 0.0F);
 
 	for (int i = iterations - 1; i >= 0; --i) {
 		// Scale output width / height back by two in each iteration
@@ -288,6 +291,10 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 			glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
 			glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
 			glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
+			glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC,
+			            glass_zoom_follow_mouse ? 1 : 0);
+			glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC,
+			            (GLfloat)glass_anchor.x, (GLfloat)glass_anchor.y);
 			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X1_LOC, bctx->liquid_glass_curve[0]);
 			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC, bctx->liquid_glass_curve[1]);
 			glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X2_LOC, bctx->liquid_glass_curve[2]);
@@ -445,7 +452,8 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
 		    args->opacity, args->liquid_glass_strength, args->liquid_glass_distance,
-		    (float)args->liquid_glass_zoom, bctx, args->source_mask,
+		    (float)args->liquid_glass_zoom, args->liquid_glass_anchor,
+		    args->liquid_glass_zoom_follow_mouse, bctx, args->source_mask,
 		    args->source_mask_scale, gd->vertex_array_objects, vao_nelems, source,
 		    gd->samplers[GL_SAMPLER_BLUR], target_fbo, gd->default_mask_texture);
 	} else {
@@ -824,6 +832,10 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform int liquid_glass_distance;
 			layout(location = UNIFORM_LIQUID_GLASS_ZOOM_LOC)
 			uniform float liquid_glass_zoom;
+			layout(location = UNIFORM_LIQUID_GLASS_ANCHOR_LOC)
+			uniform vec2 liquid_glass_anchor;
+			layout(location = UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC)
+			uniform int liquid_glass_zoom_anchor_mouse;
 			layout(location = UNIFORM_LIQUID_GLASS_CURVE_X1_LOC)
 			uniform float liquid_glass_curve_x1;
 			layout(location = UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC)
@@ -902,7 +914,11 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                  "vec2 corner_overstep = max(abs(centered) - corner_inner_bounds, vec2(0.0));\n"
 
                                  "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm / (2.0 * scale);\n"
-                                 "uv = mix(window_center, uv, liquid_glass_zoom);\n"
+                                 "vec2 zoom_origin = window_center;\n"
+                                 "if (liquid_glass_zoom_anchor_mouse == 1) {\n"
+                                 "    zoom_origin = liquid_glass_anchor * pixel_norm / (2.0 * scale);\n"
+                                 "}\n"
+                                 "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
 
                                  "float horizontal_progress = smoothstep(0.0, side_cut, overstep.x);\n"
                                  "float vertical_progress = smoothstep(0.0, side_cut, overstep.y);\n"

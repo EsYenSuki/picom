@@ -1314,6 +1314,9 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-unfocus", &opt->liquid_glass_distance_unfocus);
 		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-focus", &opt->liquid_glass_zoom_focus);
 		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-unfocus", &opt->liquid_glass_zoom_unfocus);
+		if (config_setting_lookup_bool(blur_cfg, "liquid-glass-zoom-follow-mouse", &ival)) {
+			opt->liquid_glass_zoom_follow_mouse = ival;
+		}
 		parse_bezier4_setting(blur_cfg, "liquid-glass-curve", opt->liquid_glass_curve);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-transition-duration",
 		                          &opt->liquid_glass_transition_duration);

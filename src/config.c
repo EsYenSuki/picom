@@ -705,6 +705,7 @@ bool parse_config(options_t *opt, const char *config_file) {
 	    .liquid_glass_distance_unfocus = 50,
 	    .liquid_glass_zoom_focus = 0.96,
 	    .liquid_glass_zoom_unfocus = 0.98,
+	    .liquid_glass_zoom_follow_mouse = false,
 	    .liquid_glass_curve = {1.0, 0.1, 1.0, 0.1},
 	    .liquid_glass_transition_duration = 200,
 	    .liquid_glass_transition_curve = {0.5, 0.0, 0.5, 1.0},

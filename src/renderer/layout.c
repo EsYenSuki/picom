@@ -42,7 +42,8 @@ struct layout_manager {
 /// visible / should not be rendered. `out_layer` is modified either way.
 /// zoom_factor and zoom_focal apply zoom transform if not excluded.
 static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size,
-                              double zoom_factor, ivec2 zoom_focal) {
+                              double zoom_factor, ivec2 zoom_focal,
+                              bool glass_zoom_follow_mouse, ivec2 glass_anchor) {
 	bool to_paint = false;
 	auto w_opts = win_options(w);
 	if (!w->ever_damaged || !w_opts.paint) {
@@ -142,6 +143,8 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 	out_layer->glass_strength = (float)w->glass.strength;
 	out_layer->glass_distance = (float)w->glass.distance;
 	out_layer->glass_zoom = (float)w->glass.zoom;
+	out_layer->glass_zoom_follow_mouse = glass_zoom_follow_mouse;
+	out_layer->glass_anchor = ivec2_as(glass_anchor);
 	out_layer->shadow_color.red = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_RED);
 	out_layer->shadow_color.green = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_GREEN);
 	out_layer->shadow_color.blue = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_BLUE);
@@ -248,7 +251,8 @@ void layout_manager_free(struct layout_manager *lm) {
 
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
                                   uint64_t root_pixmap_generation, ivec2 size,
-                                  double zoom_factor, ivec2 zoom_focal) {
+                                  double zoom_factor, ivec2 zoom_focal,
+                                  bool glass_zoom_follow_mouse, ivec2 glass_anchor) {
 	auto prev_layout = &lm->layouts[lm->current];
 	lm->current = (lm->current + 1) % lm->max_buffer_age;
 	auto layout = &lm->layouts[lm->current];
@@ -265,7 +269,8 @@ void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
 		}
 		dynarr_resize(layout->layers, rank + 1, layer_init, layer_deinit);
 		if (!layer_from_window(&layout->layers[rank], (struct win *)w, size,
-		                       zoom_factor, zoom_focal)) {
+		                       zoom_factor, zoom_focal, glass_zoom_follow_mouse,
+		                       glass_anchor)) {
 			continue;
 		}
 

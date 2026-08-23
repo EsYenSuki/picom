@@ -124,7 +124,11 @@ static inline void command_blur_damage(region_t *damage, region_t *scratch_regio
 	if (cmd1->blur.opacity != cmd2->blur.opacity ||
 	    cmd1->blur.liquid_glass_strength != cmd2->blur.liquid_glass_strength ||
 	    cmd1->blur.liquid_glass_distance != cmd2->blur.liquid_glass_distance ||
-	    cmd1->blur.liquid_glass_zoom != cmd2->blur.liquid_glass_zoom) {
+	    cmd1->blur.liquid_glass_zoom != cmd2->blur.liquid_glass_zoom ||
+	    cmd1->blur.liquid_glass_zoom_follow_mouse !=
+	        cmd2->blur.liquid_glass_zoom_follow_mouse ||
+	    (cmd1->blur.liquid_glass_zoom_follow_mouse &&
+	     !vec2_eq(cmd1->blur.liquid_glass_anchor, cmd2->blur.liquid_glass_anchor))) {
 		pixman_region32_union(damage, damage, &cmd1->target_mask);
 		pixman_region32_union(damage, damage, &cmd2->target_mask);
 		return;

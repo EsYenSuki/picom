@@ -532,7 +532,10 @@ static const struct picom_option picom_options[] = {
     [352] = {"liquid-glass-transition-duration", INTEGER(liquid_glass_transition_duration, 0, INT_MAX), "Duration of the focus <-> unfocus transition of liquid_glass parameters, in "
                                                                                                    "milliseconds. (default: 200)"},
     [353] = {"liquid-glass-curve"          , required_argument, {.offset = offsetof(options_t, liquid_glass_curve), .handler = store_zoom_bezier}, "Liquid_glass edge easing cubic-bezier control points as x1,y1,x2,y2. (default "
-                                                                                                                                                  "1.0,0.1,1.0,0.1)"},
+                                                                                                                                                   "1.0,0.1,1.0,0.1)"},
+    [354] = {"liquid-glass-zoom-follow-mouse", ENABLE(liquid_glass_zoom_follow_mouse), "Anchor the liquid glass zoom at the mouse cursor instead of the window "
+                                                                                               "center."},
+    [355] = {"no-liquid-glass-zoom-follow-mouse", DISABLE(liquid_glass_zoom_follow_mouse)},
     [349] = {"liquid-glass-transition-curve", required_argument, {.offset = offsetof(options_t, liquid_glass_transition_curve), .handler = store_zoom_bezier}, "Cubic-bezier easing of the focus <-> unfocus liquid_glass transition, as "
                                                                                                                                                         "x1,y1,x2,y2. (default 0.5,0.0,0.5,1.0)"},
     [343] = {"blur-noise-radius"           , INTEGER(blur_noise_radius, 0, INT_MAX)         , "Maximum displacement for noise."},

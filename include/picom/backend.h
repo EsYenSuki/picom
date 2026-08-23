@@ -137,6 +137,11 @@ struct backend_blur_args {
 	int liquid_glass_distance;
 	/// Inward zoom applied to the liquid glass sampling for this draw
 	double liquid_glass_zoom;
+	/// Whether the liquid glass zoom anchor follows the mouse cursor
+	bool liquid_glass_zoom_follow_mouse;
+	/// Position of the mouse cursor, in screen coordinates. Only used when
+	/// `liquid_glass_zoom_follow_mouse` is true.
+	vec2 liquid_glass_anchor;
 };
 
 struct backend_blit_args {

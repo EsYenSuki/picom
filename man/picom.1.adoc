@@ -947,6 +947,9 @@ Available options of the _blur_ section are: ::
   *liquid-glass-zoom-focus*, *liquid-glass-zoom-unfocus*:::
     Floating point numbers from 0 to 1. Inward zoom applied before edge stretching; lower values hide more of the slow section and protect the window boundary. Transitions between the two values are animated (default: 0.96 / 0.98).
 
+  *liquid-glass-zoom-follow-mouse*:::
+    A boolean. If true, the anchor point of the _liquid_glass_ zoom follows the mouse cursor instead of staying at the center of the window. Corresponds to the *--liquid-glass-zoom-follow-mouse* command line option (default: false).
+
   *liquid-glass-curve*:::
     Floating point cubic-bezier control points for the liquid glass edge easing curve, as an array or comma-separated list `x1, y1, x2, y2`, i.e. `cubic-bezier(x1, y1, x2, y2)` (default: `1.0, 0.1, 1.0, 0.1`).
 

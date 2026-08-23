@@ -184,6 +184,40 @@ static void zoom_poll_pointer(session_t *ps) {
 	}
 }
 
+/// Returns true if the liquid glass zoom follow mouse option is enabled and
+/// at least one visible window currently has an active liquid glass zoom
+/// effect.
+static bool glass_follow_active(session_t *ps) {
+	if (!ps->o.liquid_glass_zoom_follow_mouse ||
+	    ps->o.blur_method != BLUR_METHOD_LIQUID_GLASS) {
+		return false;
+	}
+	wm_stack_foreach(ps->wm, cursor) {
+		auto w = wm_ref_deref(cursor);
+		if (w == NULL) {
+			continue;
+		}
+		if (w->glass.zoom < 0.999 && w->ever_damaged && w->win_image != NULL &&
+		    win_options(w).blur_background) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void glass_poll_pointer(session_t *ps) {
+	if (!glass_follow_active(ps)) {
+		return;
+	}
+	auto pointer = XCB_AWAIT(xcb_query_pointer, &ps->c, ps->c.screen_info->root);
+	if (pointer) {
+		ps->glass_pointer = (ivec2){.x = pointer->root_x, .y = pointer->root_y};
+		free(pointer);
+	} else {
+		ps->glass_pointer = (ivec2){.x = ps->root_width / 2, .y = ps->root_height / 2};
+	}
+}
+
 static void zoom_socket_callback(EV_P_ ev_io *w, int revents attr_unused) {
 	session_t *ps = session_ptr(w, zoom_socket_watcher);
 	char buf[64];
@@ -1870,6 +1904,7 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 
 	zoom_update(ps);
 	zoom_poll_pointer(ps);
+	glass_poll_pointer(ps);
 
 	draw_callback_enter_us = (now.tv_sec * 1000000LL + now.tv_nsec / 1000);
 	if (ps->next_render != 0) {
@@ -2008,7 +2043,8 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 		layout_manager_append_layout(
 		    ps->layout_manager, ps->wm, ps->root_image_generation,
 		    (ivec2){.width = ps->root_width, .height = ps->root_height},
-		    ps->zoom.current, ps->zoom.focal);
+		    ps->zoom.current, ps->zoom.focal, ps->o.liquid_glass_zoom_follow_mouse,
+		    ps->glass_pointer);
 		bool succeeded = renderer_render(
 		    ps->renderer, ps->backend_data, ps->root_image, &ps->root_image_extent,
 		    ps->layout_manager, ps->command_builder, ps->backend_blur_context,
@@ -2064,7 +2100,14 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 	      ps->zoom.focal.y != ps->zoom.prev_focal.y));
 	ps->zoom.prev_focal = ps->zoom.focal;
 
-	if (animation || zoom_needs_redraw) {
+	// Same for the liquid glass zoom anchor following the mouse cursor.
+	bool glass_needs_redraw =
+	    glass_follow_active(ps) &&
+	    (ps->glass_pointer.x != ps->prev_glass_pointer.x ||
+	     ps->glass_pointer.y != ps->prev_glass_pointer.y);
+	ps->prev_glass_pointer = ps->glass_pointer;
+
+	if (animation || zoom_needs_redraw || glass_needs_redraw) {
 		queue_redraw(ps);
 	} else {
 		ps->fade_time = 0L;
@@ -2653,6 +2696,8 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->zoom.animating = false;
 	ps->zoom.focal = (ivec2){.x = ps->root_width / 2, .y = ps->root_height / 2};
 	ps->zoom.prev_focal = ps->zoom.focal;
+	ps->glass_pointer = (ivec2){-1, -1};
+	ps->prev_glass_pointer = ps->glass_pointer;
 	ps->zoom_socket_fd = -1;
 	zoom_socket_init(ps);
 

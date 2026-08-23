@@ -443,6 +443,9 @@ typedef struct options {
 	int liquid_glass_distance_unfocus;
 	double liquid_glass_zoom_focus;
 	double liquid_glass_zoom_unfocus;
+	/// Whether the liquid glass zoom is anchored at the mouse cursor
+	/// instead of the window center.
+	bool liquid_glass_zoom_follow_mouse;
 	/// Edge easing curve of the liquid glass effect, cubic-bezier control
 	/// points x1, y1, x2, y2.
 	double liquid_glass_curve[4];

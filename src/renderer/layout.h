@@ -42,6 +42,10 @@ struct layer {
 	float glass_distance;
 	/// Inward zoom of the liquid glass effect of this window
 	float glass_zoom;
+	/// Whether the liquid glass zoom anchor follows the mouse cursor
+	bool glass_zoom_follow_mouse;
+	/// Position of the mouse cursor, in screen coordinates
+	vec2 glass_anchor;
 	/// Color of this window's shadow, alpha is shadow opacity
 	struct color shadow_color;
 	/// How much the image of this window should be blended with the saved image
@@ -91,9 +95,11 @@ struct layout_manager;
 /// layouts, with its size chosen at creation time. Calling this will push at new layout
 /// at the end of the ring buffer, and remove the oldest layout if the buffer is full.
 /// zoom_factor and zoom_focal control the zoom effect (1.0 = no zoom).
+/// glass_zoom_follow_mouse and glass_anchor control the liquid glass zoom anchor.
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
                                   uint64_t root_pixmap_generation, ivec2 size,
-                                  double zoom_factor, ivec2 zoom_focal);
+                                  double zoom_factor, ivec2 zoom_focal,
+                                  bool glass_zoom_follow_mouse, ivec2 glass_anchor);
 /// Get the layout `age` frames into the past. Age `0` is the most recently appended
 /// layout.
 struct layout *layout_manager_layout(struct layout_manager *lm, unsigned age);

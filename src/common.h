@@ -229,6 +229,10 @@ typedef struct session {
 		ivec2 focal;
 		ivec2 prev_focal;
 	} zoom;
+	/// Mouse cursor position used as the liquid glass zoom anchor, and its
+	/// value during the previous frame.
+	ivec2 glass_pointer;
+	ivec2 prev_glass_pointer;
 	int zoom_socket_fd;
 	char zoom_socket_path[108];
 	ev_io zoom_socket_watcher;
