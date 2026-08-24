@@ -167,7 +167,7 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
 bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
-                         float glass_zoom, vec2 glass_anchor,
+	                         int glass_aberration, float glass_zoom, vec2 glass_anchor,
                          bool glass_zoom_follow_mouse, struct gl_blur_context *bctx,
                          const struct backend_mask_image *mask, vec2 mask_scale,
                          const GLuint vao[2], const int vao_nelems[2],
@@ -238,6 +238,7 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 	glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, 0);
 		glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, 0.0F);
 		glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, 0);
+		glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, 0.0F);
 		// The liquid-glass shader is reused for intermediate upsample passes.
 		// Keep its zoom neutral until the final compositing pass below.
 		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, 1.0F);
@@ -289,6 +290,7 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 			glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
 			glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
 			glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
+			glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, (float)glass_aberration);
 			glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
 			glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
 			glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC,
@@ -452,7 +454,8 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
 		    args->opacity, args->liquid_glass_strength, args->liquid_glass_distance,
-		    (float)args->liquid_glass_zoom, args->liquid_glass_anchor,
+		    args->liquid_glass_aberration, (float)args->liquid_glass_zoom,
+		    args->liquid_glass_anchor,
 		    args->liquid_glass_zoom_follow_mouse, bctx, args->source_mask,
 		    args->source_mask_scale, gd->vertex_array_objects, vao_nelems, source,
 		    gd->samplers[GL_SAMPLER_BLUR], target_fbo, gd->default_mask_texture);
@@ -828,6 +831,8 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform float noise_scale;
 			layout(location = UNIFORM_LIQUID_GLASS_STRENGTH_LOC)
 			uniform int liquid_glass_strength;
+			layout(location = UNIFORM_LIQUID_GLASS_ABERRATION_LOC)
+			uniform float liquid_glass_aberration;
 			layout(location = UNIFORM_LIQUID_GLASS_DISTANCE_LOC)
 			uniform int liquid_glass_distance;
 			layout(location = UNIFORM_LIQUID_GLASS_ZOOM_LOC)
@@ -859,6 +864,17 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			out vec4 out_color;
 			float mask_factor();
 			vec2 perturb(vec2, float, float);
+			vec4 liquid_glass_blur(vec2 sample_uv, vec2 sample_offset) {
+				vec4 result = texture2D(tex_src, sample_uv + vec2(-1.0, 0.0) * sample_offset);
+				result += texture2D(tex_src, sample_uv + vec2(-0.5, 0.5) * sample_offset) * 2.0;
+				result += texture2D(tex_src, sample_uv + vec2(0.0, 1.0) * sample_offset);
+				result += texture2D(tex_src, sample_uv + vec2(0.5, 0.5) * sample_offset) * 2.0;
+				result += texture2D(tex_src, sample_uv + vec2(1.0, 0.0) * sample_offset);
+				result += texture2D(tex_src, sample_uv + vec2(0.5, -0.5) * sample_offset) * 2.0;
+				result += texture2D(tex_src, sample_uv + vec2(0.0, -1.0) * sample_offset);
+				result += texture2D(tex_src, sample_uv + vec2(-0.5, -0.5) * sample_offset) * 2.0;
+				return result / 12.0;
+			}
 			float liquid_glass_bezier(float x) {
 				// cubic-bezier control points, solved from x to its parameter.
 				float t = x;
@@ -880,15 +896,11 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 				vec2 offset = %.7g * pixel_norm;
 				vec2 uv = perturb(texcoord, noise_radius, noise_scale) * pixel_norm / (2 * scale);
 				%s
-				vec4 sum = texture2D(tex_src, uv + vec2(-1.0, 0.0) * offset);
-				sum += texture2D(tex_src, uv + vec2(-0.5, 0.5) * offset) * 2.0;
-				sum += texture2D(tex_src, uv + vec2(0.0, 1.0) * offset);
-				sum += texture2D(tex_src, uv + vec2(0.5, 0.5) * offset) * 2.0;
-				sum += texture2D(tex_src, uv + vec2(1.0, 0.0) * offset);
-				sum += texture2D(tex_src, uv + vec2(0.5, -0.5) * offset) * 2.0;
-				sum += texture2D(tex_src, uv + vec2(0.0, -1.0) * offset);
-				sum += texture2D(tex_src, uv + vec2(-0.5, -0.5) * offset) * 2.0;
-				out_color = sum / 12.0 * opacity * mask_factor();
+				vec4 base_color = liquid_glass_blur(uv, offset);
+				vec4 red_color = liquid_glass_blur(uv + aberration_offset, offset);
+				vec4 blue_color = liquid_glass_blur(uv - aberration_offset, offset);
+				out_color = vec4(red_color.r, base_color.g, blue_color.b, base_color.a) *
+				            opacity * mask_factor();
 			}
 		);
 		// clang-format on
@@ -937,9 +949,11 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                  "    vertical_direction * vertical_progress +\n"
                                  "    diagonal_direction * corner_progress;\n"
 
-                                 "uv += stretch * float(liquid_glass_strength) * 1.8\n"
-                                 "    * pixel_norm / (2.0 * scale);\n"
-                               : "";
+                                  "uv += stretch * float(liquid_glass_strength) * 1.8\n"
+                                  "    * pixel_norm / (2.0 * scale);\n"
+                                  "vec2 aberration_offset = stretch * liquid_glass_aberration\n"
+                                  "    * pixel_norm / (2.0 * scale);\n"
+                                : "vec2 aberration_offset = vec2(0.0);\n";
 		size_t shader_len = strlen(FRAG_SHADER_UP) + strlen(warp) + 24 + 1;
 		char *shader_str = ccalloc(shader_len, char);
 		auto real_shader_len =

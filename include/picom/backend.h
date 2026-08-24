@@ -133,6 +133,8 @@ struct backend_blur_args {
 	double opacity;
 	/// Strength of the liquid glass edge stretching for this draw
 	int liquid_glass_strength;
+	/// Strength of liquid glass chromatic aberration for this draw
+	int liquid_glass_aberration;
 	/// Distance over which the liquid glass stretching fades for this draw
 	int liquid_glass_distance;
 	/// Inward zoom applied to the liquid glass sampling for this draw

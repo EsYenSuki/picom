@@ -439,6 +439,8 @@ typedef struct options {
 	int blur_strength;
 	int liquid_glass_strength_focus;
 	int liquid_glass_strength_unfocus;
+	int liquid_glass_aberration_focus;
+	int liquid_glass_aberration_unfocus;
 	int liquid_glass_distance_focus;
 	int liquid_glass_distance_unfocus;
 	double liquid_glass_zoom_focus;

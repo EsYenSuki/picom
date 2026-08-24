@@ -141,6 +141,7 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 	out_layer->blur_opacity =
 	    (float)clamp(win_animatable_get(w, WIN_SCRIPT_BLUR_OPACITY), 0., 1.);
 	out_layer->glass_strength = (float)w->glass.strength;
+	out_layer->glass_aberration = (float)w->glass.aberration;
 	out_layer->glass_distance = (float)w->glass.distance;
 	out_layer->glass_zoom = (float)w->glass.zoom;
 	out_layer->glass_zoom_follow_mouse = glass_zoom_follow_mouse;

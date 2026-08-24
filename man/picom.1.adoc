@@ -933,10 +933,10 @@ Available options of the _blur_ section are: ::
     An integer in the range 0-20. The strength of the _dual_kawase_ blur method. Corresponds to the *--blur-strength* command line option. If set to zero, the value requested by *--blur-size* is approximated (default: 5).
 
   *liquid-glass-strength-focus*, *liquid-glass-strength-unfocus*:::
-    Integers. The strength, in pixels, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Transitions between the two values are animated (default: 100 / 50).
+    Integers. The strength, in pixels at 1920x1080, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Values scale with the root window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
 
   *liquid-glass-distance-focus*, *liquid-glass-distance-unfocus*:::
-    Integers. The distance, in pixels, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Transitions between the two values are animated (default: 100 / 50).
+    Integers. The distance, in pixels at 1920x1080, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Values scale with the root window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
 
   *liquid-glass-transition-duration*:::
     An integer. Duration of the focus/unfocus transition of the liquid glass parameters, in milliseconds (default: 200).
@@ -945,7 +945,7 @@ Available options of the _blur_ section are: ::
     Cubic-bezier easing of the focus/unfocus liquid glass transition, as an array or comma-separated list `x1, y1, x2, y2` (default: `0.5, 0.0, 0.5, 1.0`).
 
   *liquid-glass-zoom-focus*, *liquid-glass-zoom-unfocus*:::
-    Floating point numbers from 0 to 1. Inward zoom applied before edge stretching; lower values hide more of the slow section and protect the window boundary. Transitions between the two values are animated (default: 0.96 / 0.98).
+    Floating point numbers from 0 to 1. Inward zoom applied before edge stretching. This value is not scaled with the root window size; lower values hide more of the slow section and protect the window boundary. Transitions between the two values are animated (default: 0.96 / 0.98).
 
   *liquid-glass-zoom-follow-mouse*:::
     A boolean. If true, the anchor point of the _liquid_glass_ zoom follows the mouse cursor instead of staying at the center of the window. Corresponds to the *--liquid-glass-zoom-follow-mouse* command line option (default: false).

@@ -1205,6 +1205,10 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 	config_lookup_float(&cfg, "blur-deviation", &opt->blur_deviation);
 	// --blur-strength
 	config_lookup_int(&cfg, "blur-strength", &opt->blur_strength);
+	config_lookup_int(&cfg, "liquid-glass-aberration-focus",
+	                 &opt->liquid_glass_aberration_focus);
+	config_lookup_int(&cfg, "liquid-glass-aberration-unfocus",
+	                 &opt->liquid_glass_aberration_unfocus);
 	// --blur-background
 	if (config_lookup_bool(&cfg, "blur-background", &ival) && ival) {
 		if (opt->blur_method == BLUR_METHOD_NONE) {
@@ -1310,6 +1314,10 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 		config_setting_lookup_float(blur_cfg, "noise-scale", &opt->blur_noise_scale);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-strength-focus", &opt->liquid_glass_strength_focus);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-strength-unfocus", &opt->liquid_glass_strength_unfocus);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-aberration-focus",
+		                          &opt->liquid_glass_aberration_focus);
+		config_setting_lookup_int(blur_cfg, "liquid-glass-aberration-unfocus",
+		                          &opt->liquid_glass_aberration_unfocus);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-focus", &opt->liquid_glass_distance_focus);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-unfocus", &opt->liquid_glass_distance_unfocus);
 		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-focus", &opt->liquid_glass_zoom_focus);

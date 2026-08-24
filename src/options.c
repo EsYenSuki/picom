@@ -523,6 +523,8 @@ static const struct picom_option picom_options[] = {
     [331] = {"blur-strength"               , INTEGER(blur_strength, 0, INT_MAX)             , "The strength level of the 'dual_kawase' blur method."},
     [345] = {"liquid-glass-strength-focus" , INTEGER(liquid_glass_strength_focus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is focused."},
     [346] = {"liquid-glass-strength-unfocus", INTEGER(liquid_glass_strength_unfocus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is not focused."},
+    [356] = {"liquid-glass-aberration-focus" , INTEGER(liquid_glass_aberration_focus, 0, INT_MAX), "Chromatic aberration strength when the window is focused."},
+    [357] = {"liquid-glass-aberration-unfocus", INTEGER(liquid_glass_aberration_unfocus, 0, INT_MAX), "Chromatic aberration strength when the window is not focused."},
     [347] = {"liquid-glass-zoom-focus"    , FLOAT(liquid_glass_zoom_focus, 0, 1)         , "Inward zoom applied to liquid_glass sampling when the window is focused."},
     [348] = {"liquid-glass-zoom-unfocus"  , FLOAT(liquid_glass_zoom_unfocus, 0, 1)       , "Inward zoom applied to liquid_glass sampling when the window is not focused."},
     [350] = {"liquid-glass-distance-focus" , INTEGER(liquid_glass_distance_focus, 1, INT_MAX), "Distance from the edge over which liquid_glass stretching fades when the "
@@ -537,7 +539,7 @@ static const struct picom_option picom_options[] = {
                                                                                                "center."},
     [355] = {"no-liquid-glass-zoom-follow-mouse", DISABLE(liquid_glass_zoom_follow_mouse)},
     [349] = {"liquid-glass-transition-curve", required_argument, {.offset = offsetof(options_t, liquid_glass_transition_curve), .handler = store_zoom_bezier}, "Cubic-bezier easing of the focus <-> unfocus liquid_glass transition, as "
-                                                                                                                                                        "x1,y1,x2,y2. (default 0.5,0.0,0.5,1.0)"},
+                                                                                                                                                         "x1,y1,x2,y2. (default 0.0,1.0,1.0,1.0)"},
     [343] = {"blur-noise-radius"           , INTEGER(blur_noise_radius, 0, INT_MAX)         , "Maximum displacement for noise."},
     [344] = {"blur-noise-scale"            , FLOAT(blur_noise_scale, 0, INFINITY)           , "Size of noise features."},
     [333] = {"corner-radius"               , INTEGER(corner_radius, 0, INT_MAX)             , "Sets the radius of rounded window corners. When > 0, the compositor will "

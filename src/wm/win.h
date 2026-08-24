@@ -234,11 +234,11 @@ struct win {
 
 	/// Liquid glass focus/unfocus transition state
 	struct {
-		/// Current (animated) strength, distance, and zoom of the liquid
+		/// Current (animated) strength, aberration, distance, and zoom of the liquid
 		/// glass effect for this window.
-		double strength, distance, zoom;
-		/// Strength, distance, and zoom when the current transition started.
-		double strength_from, distance_from, zoom_from;
+		double strength, aberration, distance, zoom;
+		/// Strength, aberration, distance, and zoom when the current transition started.
+		double strength_from, aberration_from, distance_from, zoom_from;
 		/// Elapsed time of the current transition, in milliseconds.
 		int64_t elapsed;
 		/// Whether the current transition is heading toward the focused

@@ -1685,15 +1685,25 @@ double win_animatable_get(const struct win *w, enum win_script_output output) {
 /// Returns true if a transition is still running.
 bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) {
 	const auto o = &ps->o;
-	auto target_strength = w->is_focused ? (double)o->liquid_glass_strength_focus
-	                                     : (double)o->liquid_glass_strength_unfocus;
-	auto target_distance = w->is_focused ? (double)o->liquid_glass_distance_focus
-	                                     : (double)o->liquid_glass_distance_unfocus;
+	// Scale pixel-based liquid-glass values from the 1920x1080 reference
+	// resolution. Liquid-glass zoom values are intentionally not scaled.
+	const double screen_scale = min2((double)ps->root_width / 1920.0,
+	                                 (double)ps->root_height / 1080.0);
+	double target_strength = w->is_focused ? o->liquid_glass_strength_focus
+	                                       : o->liquid_glass_strength_unfocus;
+	double target_aberration = w->is_focused ? o->liquid_glass_aberration_focus
+	                                         : o->liquid_glass_aberration_unfocus;
+	double target_distance = w->is_focused ? o->liquid_glass_distance_focus
+	                                       : o->liquid_glass_distance_unfocus;
+	target_strength *= screen_scale;
+	target_aberration *= screen_scale;
+	target_distance *= screen_scale;
 	auto target_zoom =
 	    w->is_focused ? o->liquid_glass_zoom_focus : o->liquid_glass_zoom_unfocus;
 
 	if (!w->glass.initialized) {
 		w->glass.strength = target_strength;
+		w->glass.aberration = target_aberration;
 		w->glass.distance = target_distance;
 		w->glass.zoom = target_zoom;
 		w->glass.focused_target = w->is_focused;
@@ -1706,6 +1716,7 @@ bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) 
 	if (w->is_focused != w->glass.focused_target) {
 		// Focus changed, start a new transition from where we are now
 		w->glass.strength_from = w->glass.strength;
+		w->glass.aberration_from = w->glass.aberration;
 		w->glass.distance_from = w->glass.distance;
 		w->glass.zoom_from = w->glass.zoom;
 		w->glass.focused_target = w->is_focused;
@@ -1714,6 +1725,7 @@ bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) 
 
 	if (w->glass.elapsed >= o->liquid_glass_transition_duration) {
 		w->glass.strength = target_strength;
+		w->glass.aberration = target_aberration;
 		w->glass.distance = target_distance;
 		w->glass.zoom = target_zoom;
 		w->glass.transitioning = false;
@@ -1737,6 +1749,8 @@ bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) 
 	double progress = curve_sample(&ease, tp);
 	w->glass.strength =
 	    w->glass.strength_from + (target_strength - w->glass.strength_from) * progress;
+	w->glass.aberration = w->glass.aberration_from +
+	                      (target_aberration - w->glass.aberration_from) * progress;
 	w->glass.distance =
 	    w->glass.distance_from + (target_distance - w->glass.distance_from) * progress;
 	w->glass.zoom = w->glass.zoom_from + (target_zoom - w->glass.zoom_from) * progress;

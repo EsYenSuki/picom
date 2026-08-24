@@ -38,6 +38,7 @@ struct layer {
 	float blur_opacity;
 	/// Strength of the liquid glass effect of this window
 	float glass_strength;
+	float glass_aberration;
 	/// Edge distance of the liquid glass effect of this window
 	float glass_distance;
 	/// Inward zoom of the liquid glass effect of this window
