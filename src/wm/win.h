@@ -322,6 +322,7 @@ static const struct script_output_info win_script_outputs[] = {
 
 static const struct window_maybe_options WIN_MAYBE_OPTIONS_DEFAULT = {
     .blur_background = TRI_UNKNOWN,
+    .liquid_glass_no_dual_kawase = TRI_UNKNOWN,
     .clip_shadow_above = TRI_UNKNOWN,
     .shadow = TRI_UNKNOWN,
     .fade = TRI_UNKNOWN,
@@ -355,6 +356,8 @@ win_maybe_options_fold(struct window_maybe_options upper, struct window_maybe_op
 	struct window_maybe_options ret = {
 	    .unredir = upper.unredir == WINDOW_UNREDIR_INVALID ? lower.unredir : upper.unredir,
 	    .blur_background = tri_or(upper.blur_background, lower.blur_background),
+	    .liquid_glass_no_dual_kawase =
+	        tri_or(upper.liquid_glass_no_dual_kawase, lower.liquid_glass_no_dual_kawase),
 	    .clip_shadow_above = tri_or(upper.clip_shadow_above, lower.clip_shadow_above),
 	    .full_shadow = tri_or(upper.full_shadow, lower.full_shadow),
 	    .shadow = tri_or(upper.shadow, lower.shadow),
@@ -383,6 +386,8 @@ win_maybe_options_or(struct window_maybe_options maybe, struct window_options de
 	struct window_options ret = {
 	    .unredir = maybe.unredir == WINDOW_UNREDIR_INVALID ? def.unredir : maybe.unredir,
 	    .blur_background = tri_or_bool(maybe.blur_background, def.blur_background),
+	    .liquid_glass_no_dual_kawase =
+	        tri_or_bool(maybe.liquid_glass_no_dual_kawase, def.liquid_glass_no_dual_kawase),
 	    .clip_shadow_above = tri_or_bool(maybe.clip_shadow_above, def.clip_shadow_above),
 	    .full_shadow = tri_or_bool(maybe.full_shadow, def.full_shadow),
 	    .shadow = tri_or_bool(maybe.shadow, def.shadow),

@@ -36,6 +36,10 @@ struct layer {
 	float opacity;
 	/// Opacity of the background blur of this window
 	float blur_opacity;
+	/// Window-size scale applied to dual-kawase blur sampling offsets
+	float blur_scale;
+	/// Whether this liquid-glass window skips the preliminary dual-kawase blur.
+	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass effect of this window
 	float glass_strength;
 	float glass_aberration;
@@ -43,6 +47,8 @@ struct layer {
 	float glass_distance;
 	/// Inward zoom of the liquid glass effect of this window
 	float glass_zoom;
+	/// Saturation multiplier of the liquid glass effect of this window
+	float glass_saturation;
 	/// Whether the liquid glass zoom anchor follows the mouse cursor
 	bool glass_zoom_follow_mouse;
 	/// Position of the mouse cursor, in screen coordinates
@@ -100,7 +106,9 @@ struct layout_manager;
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
                                   uint64_t root_pixmap_generation, ivec2 size,
                                   double zoom_factor, ivec2 zoom_focal,
-                                  bool glass_zoom_follow_mouse, ivec2 glass_anchor);
+	                           bool glass_zoom_follow_mouse, ivec2 glass_anchor,
+	                           double glass_saturation, double blur_min_scale,
+                                   enum blur_method blur_method);
 /// Get the layout `age` frames into the past. Age `0` is the most recently appended
 /// layout.
 struct layout *layout_manager_layout(struct layout_manager *lm, unsigned age);

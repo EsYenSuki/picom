@@ -34,6 +34,7 @@ typedef struct win_option_mask {
 	bool fade : 1;
 	bool focus : 1;
 	bool blur_background : 1;
+	bool liquid_glass_no_dual_kawase : 1;
 	bool full_shadow : 1;
 	bool redir_ignore : 1;
 	bool opacity : 1;
@@ -45,6 +46,7 @@ typedef struct win_option {
 	bool fade;
 	bool focus;
 	bool blur_background;
+	bool liquid_glass_no_dual_kawase;
 	bool full_shadow;
 	bool redir_ignore;
 	double opacity;
@@ -254,6 +256,8 @@ struct window_maybe_options {
 	enum tristate invert_color;
 	/// Whether to blur window background.
 	enum tristate blur_background;
+	/// Whether to skip the preliminary dual-kawase blur for liquid glass.
+	enum tristate liquid_glass_no_dual_kawase;
 	/// Whether this window should fade.
 	enum tristate fade;
 	/// Do not paint shadow over this window.
@@ -284,6 +288,7 @@ struct window_options {
 	bool shadow;
 	bool invert_color;
 	bool blur_background;
+	bool liquid_glass_no_dual_kawase;
 	bool fade;
 	bool clip_shadow_above;
 	bool paint;
@@ -437,12 +442,18 @@ typedef struct options {
 	double blur_deviation;
 	// Strength of the dual_kawase blur
 	int blur_strength;
+	/// Minimum window-size scale applied to dual-kawase blur strength.
+	double blur_min_scale;
 	int liquid_glass_strength_focus;
 	int liquid_glass_strength_unfocus;
 	int liquid_glass_aberration_focus;
 	int liquid_glass_aberration_unfocus;
 	int liquid_glass_distance_focus;
 	int liquid_glass_distance_unfocus;
+	/// Minimum window-size scale applied to liquid-glass pixel values.
+	double liquid_glass_min_scale;
+	/// Saturation multiplier for the liquid-glass result.
+	double liquid_glass_saturation;
 	double liquid_glass_zoom_focus;
 	double liquid_glass_zoom_unfocus;
 	/// Whether the liquid glass zoom is anchored at the mouse cursor

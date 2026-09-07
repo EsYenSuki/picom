@@ -520,7 +520,8 @@ static const struct picom_option picom_options[] = {
                                                                                               "--no-use-damage. (default: 1.0, meaning no dimming)"},
     [329] = {"blur-size"                   , INTEGER(blur_radius, 0, INT_MAX)               , "The radius of the blur kernel for 'box' and 'gaussian' blur method."},
     [330] = {"blur-deviation"              , FLOAT(blur_deviation, 0, INFINITY)             , "The standard deviation for the 'gaussian' blur method."},
-    [331] = {"blur-strength"               , INTEGER(blur_strength, 0, INT_MAX)             , "The strength level of the 'dual_kawase' blur method."},
+     [331] = {"blur-strength"               , INTEGER(blur_strength, 0, INT_MAX)             , "The strength level of the 'dual_kawase' blur method."},
+     [360] = {"blur-min-scale"              , FLOAT(blur_min_scale, 0, 1)                    , "Minimum window-size scale for dual_kawase and liquid_glass blur. (default: 0.0)"},
     [345] = {"liquid-glass-strength-focus" , INTEGER(liquid_glass_strength_focus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is focused."},
     [346] = {"liquid-glass-strength-unfocus", INTEGER(liquid_glass_strength_unfocus, 0, INT_MAX), "Strength of liquid_glass edge stretching when the window is not focused."},
     [356] = {"liquid-glass-aberration-focus" , INTEGER(liquid_glass_aberration_focus, 0, INT_MAX), "Chromatic aberration strength when the window is focused."},
@@ -531,6 +532,8 @@ static const struct picom_option picom_options[] = {
                                                                                               "window is focused."},
     [351] = {"liquid-glass-distance-unfocus", INTEGER(liquid_glass_distance_unfocus, 1, INT_MAX), "Distance from the edge over which liquid_glass stretching fades when the "
                                                                                                "window is not focused."},
+    [358] = {"liquid-glass-min-scale"       , FLOAT(liquid_glass_min_scale, 0, 1)             , "Minimum window-size scale for liquid_glass strength and distance. (default: 0.0)"},
+    [359] = {"liquid-glass-saturation"      , FLOAT(liquid_glass_saturation, 0, INFINITY)     , "Saturation multiplier for liquid_glass. (default: 1.0)"},
     [352] = {"liquid-glass-transition-duration", INTEGER(liquid_glass_transition_duration, 0, INT_MAX), "Duration of the focus <-> unfocus transition of liquid_glass parameters, in "
                                                                                                    "milliseconds. (default: 200)"},
     [353] = {"liquid-glass-curve"          , required_argument, {.offset = offsetof(options_t, liquid_glass_curve), .handler = store_zoom_bezier}, "Liquid_glass edge easing cubic-bezier control points as x1,y1,x2,y2. (default "

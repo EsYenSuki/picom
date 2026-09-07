@@ -790,11 +790,9 @@ void ev_handle(session_t *ps, xcb_generic_event_t *ev) {
 		ev->sequence = seq;
 	}
 
-	// XXX redraw needs to be more fine grained
-	queue_redraw(ps);
-
 	// We intentionally ignore events sent via SendEvent. Those events has the 8th bit
 	// of response_type set, meaning they will match none of the cases below.
+	queue_redraw(ps);
 	switch (ev->response_type) {
 	case XCB_FOCUS_IN: ev_focus_in(ps, (xcb_focus_in_event_t *)ev); break;
 	case XCB_FOCUS_OUT: ev_focus_out(ps, (xcb_focus_out_event_t *)ev); break;

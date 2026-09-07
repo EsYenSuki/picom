@@ -205,6 +205,10 @@ static inline void parse_wintype_config(const config_t *cfg, const char *member_
 			o->blur_background = ival;
 			mask->blur_background = true;
 		}
+		if (config_setting_lookup_bool(setting, "liquid-glass-no-dual-kawase", &ival)) {
+			o->liquid_glass_no_dual_kawase = ival;
+			mask->liquid_glass_no_dual_kawase = true;
+		}
 		if (config_setting_lookup_bool(setting, "full-shadow", &ival)) {
 			o->full_shadow = ival;
 			mask->full_shadow = true;
@@ -648,6 +652,8 @@ static const struct {
     {"full-shadow", offsetof(struct window_maybe_options, full_shadow)},
     {"invert-color", offsetof(struct window_maybe_options, invert_color)},
     {"blur-background", offsetof(struct window_maybe_options, blur_background)},
+	{"liquid-glass-no-dual-kawase",
+	 offsetof(struct window_maybe_options, liquid_glass_no_dual_kawase)},
     {"clip-shadow-above", offsetof(struct window_maybe_options, clip_shadow_above)},
     {"transparent-clipping", offsetof(struct window_maybe_options, transparent_clipping)},
 };
@@ -1205,10 +1211,13 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 	config_lookup_float(&cfg, "blur-deviation", &opt->blur_deviation);
 	// --blur-strength
 	config_lookup_int(&cfg, "blur-strength", &opt->blur_strength);
+	config_lookup_float(&cfg, "blur-min-scale", &opt->blur_min_scale);
 	config_lookup_int(&cfg, "liquid-glass-aberration-focus",
 	                 &opt->liquid_glass_aberration_focus);
 	config_lookup_int(&cfg, "liquid-glass-aberration-unfocus",
 	                 &opt->liquid_glass_aberration_unfocus);
+	config_lookup_float(&cfg, "liquid-glass-min-scale", &opt->liquid_glass_min_scale);
+	config_lookup_float(&cfg, "liquid-glass-saturation", &opt->liquid_glass_saturation);
 	// --blur-background
 	if (config_lookup_bool(&cfg, "blur-background", &ival) && ival) {
 		if (opt->blur_method == BLUR_METHOD_NONE) {
@@ -1309,6 +1318,7 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 
 		config_setting_lookup_float(blur_cfg, "deviation", &opt->blur_deviation);
 		config_setting_lookup_int(blur_cfg, "strength", &opt->blur_strength);
+		config_setting_lookup_float(blur_cfg, "min-scale", &opt->blur_min_scale);
 
 		config_setting_lookup_int(blur_cfg, "noise-radius", &opt->blur_noise_radius);
 		config_setting_lookup_float(blur_cfg, "noise-scale", &opt->blur_noise_scale);
@@ -1320,6 +1330,8 @@ bool parse_config_libconfig(options_t *opt, const char *config_file) { /*NOLINT(
 		                          &opt->liquid_glass_aberration_unfocus);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-focus", &opt->liquid_glass_distance_focus);
 		config_setting_lookup_int(blur_cfg, "liquid-glass-distance-unfocus", &opt->liquid_glass_distance_unfocus);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-min-scale", &opt->liquid_glass_min_scale);
+		config_setting_lookup_float(blur_cfg, "liquid-glass-saturation", &opt->liquid_glass_saturation);
 		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-focus", &opt->liquid_glass_zoom_focus);
 		config_setting_lookup_float(blur_cfg, "liquid-glass-zoom-unfocus", &opt->liquid_glass_zoom_unfocus);
 		if (config_setting_lookup_bool(blur_cfg, "liquid-glass-zoom-follow-mouse", &ival)) {

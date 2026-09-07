@@ -209,12 +209,50 @@ static void glass_poll_pointer(session_t *ps) {
 	if (!glass_follow_active(ps)) {
 		return;
 	}
+	// Pointer motion is delivered by the root window. Only query once to
+	// initialize the position, then let motion events update it.
+	if (ps->glass_pointer.x >= 0 && ps->glass_pointer.y >= 0) {
+		return;
+	}
 	auto pointer = XCB_AWAIT(xcb_query_pointer, &ps->c, ps->c.screen_info->root);
 	if (pointer) {
 		ps->glass_pointer = (ivec2){.x = pointer->root_x, .y = pointer->root_y};
 		free(pointer);
 	} else {
 		ps->glass_pointer = (ivec2){.x = ps->root_width / 2, .y = ps->root_height / 2};
+	}
+}
+
+static void glass_pointer_timer_callback(EV_P_ ev_timer *w, int revents attr_unused) {
+	session_t *ps = session_ptr(w, glass_pointer_timer);
+	if (!glass_follow_active(ps)) {
+		ev_timer_stop(EV_A_ w);
+		return;
+	}
+
+	auto pointer = XCB_AWAIT(xcb_query_pointer, &ps->c, ps->c.screen_info->root);
+	if (!pointer) {
+		return;
+	}
+	ivec2 position = {.x = pointer->root_x, .y = pointer->root_y};
+	free(pointer);
+	if (position.x == ps->glass_pointer.x && position.y == ps->glass_pointer.y) {
+		return;
+	}
+	ps->glass_pointer = position;
+	queue_redraw(ps);
+}
+
+static void glass_pointer_timer_update(session_t *ps) {
+	if (!glass_follow_active(ps)) {
+		if (ev_is_active(&ps->glass_pointer_timer)) {
+			ev_timer_stop(ps->loop, &ps->glass_pointer_timer);
+		}
+		return;
+	}
+	if (!ev_is_active(&ps->glass_pointer_timer)) {
+		ev_timer_set(&ps->glass_pointer_timer, 0, 1.0 / 30.0);
+		ev_timer_start(ps->loop, &ps->glass_pointer_timer);
 	}
 }
 
@@ -2044,7 +2082,8 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 		    ps->layout_manager, ps->wm, ps->root_image_generation,
 		    (ivec2){.width = ps->root_width, .height = ps->root_height},
 		    ps->zoom.current, ps->zoom.focal, ps->o.liquid_glass_zoom_follow_mouse,
-		    ps->glass_pointer);
+		    ps->glass_pointer, ps->o.liquid_glass_saturation, ps->o.blur_min_scale,
+		    ps->o.blur_method);
 		bool succeeded = renderer_render(
 		    ps->renderer, ps->backend_data, ps->root_image, &ps->root_image_extent,
 		    ps->layout_manager, ps->command_builder, ps->backend_blur_context,
@@ -2106,6 +2145,7 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 	    (ps->glass_pointer.x != ps->prev_glass_pointer.x ||
 	     ps->glass_pointer.y != ps->prev_glass_pointer.y);
 	ps->prev_glass_pointer = ps->glass_pointer;
+	glass_pointer_timer_update(ps);
 
 	if (animation || zoom_needs_redraw || glass_needs_redraw) {
 		queue_redraw(ps);
@@ -2218,6 +2258,7 @@ load_shader_source(session_t *ps, const struct shader_specification *spec) {
 static struct window_options win_options_from_config(const struct options *opts) {
 	struct window_options ret = {
 	    .blur_background = opts->blur_method != BLUR_METHOD_NONE,
+	    .liquid_glass_no_dual_kawase = false,
 	    .full_shadow = false,
 	    .shadow = opts->shadow_enable,
 	    .shadow_color =
@@ -2564,6 +2605,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ev_io_start(ps->loop, &ps->xiow);
 	ev_init(&ps->unredir_timer, tmout_unredir_callback);
 	ev_init(&ps->draw_timer, draw_callback);
+	ev_init(&ps->glass_pointer_timer, glass_pointer_timer_callback);
 
 	// Set up SIGUSR1 signal handler to reset program
 	ev_signal_init(&ps->usr1_signal, reset_enable, SIGUSR1);
@@ -2614,10 +2656,10 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	// mask is missing things we need, so we need to set it again.
 	e = xcb_request_check(
 	    ps->c.c, xcb_change_window_attributes_checked(
-	                 ps->c.c, ps->c.screen_info->root, XCB_CW_EVENT_MASK,
-	                 (const uint32_t[]){XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
-	                                    XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
-	                                    XCB_EVENT_MASK_PROPERTY_CHANGE}));
+		                 ps->c.c, ps->c.screen_info->root, XCB_CW_EVENT_MASK,
+		                 (const uint32_t[]){XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		                                    XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+			                                    XCB_EVENT_MASK_PROPERTY_CHANGE}));
 	if (e) {
 		log_error_x_error(&ps->c, e, "Failed to setup root window event mask");
 		free(e);
@@ -2818,6 +2860,7 @@ static void session_destroy(session_t *ps) {
 	// Stop libev event handlers
 	ev_timer_stop(ps->loop, &ps->unredir_timer);
 	ev_timer_stop(ps->loop, &ps->draw_timer);
+	ev_timer_stop(ps->loop, &ps->glass_pointer_timer);
 	ev_prepare_stop(ps->loop, &ps->event_check);
 	ev_signal_stop(ps->loop, &ps->usr1_signal);
 	ev_signal_stop(ps->loop, &ps->int_signal);

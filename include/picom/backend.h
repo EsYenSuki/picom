@@ -131,12 +131,18 @@ struct backend_blur_args {
 	image_handle source_image;
 	/// Opacity of the blurred image
 	double opacity;
+	/// Per-command scale applied to dual-kawase blur sampling offsets.
+	double dual_kawase_scale;
+	/// Skip the preliminary dual-kawase blur for this liquid-glass draw.
+	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass edge stretching for this draw
 	int liquid_glass_strength;
 	/// Strength of liquid glass chromatic aberration for this draw
 	int liquid_glass_aberration;
 	/// Distance over which the liquid glass stretching fades for this draw
 	int liquid_glass_distance;
+	/// Saturation multiplier for the liquid glass result
+	double liquid_glass_saturation;
 	/// Inward zoom applied to the liquid glass sampling for this draw
 	double liquid_glass_zoom;
 	/// Whether the liquid glass zoom anchor follows the mouse cursor

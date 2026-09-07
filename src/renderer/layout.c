@@ -43,7 +43,9 @@ struct layout_manager {
 /// zoom_factor and zoom_focal apply zoom transform if not excluded.
 static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size,
                               double zoom_factor, ivec2 zoom_focal,
-                              bool glass_zoom_follow_mouse, ivec2 glass_anchor) {
+                              bool glass_zoom_follow_mouse, ivec2 glass_anchor,
+                              double glass_saturation, double blur_min_scale,
+                              enum blur_method blur_method) {
 	bool to_paint = false;
 	auto w_opts = win_options(w);
 	if (!w->ever_damaged || !w_opts.paint) {
@@ -140,12 +142,27 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 	out_layer->opacity = (float)win_animatable_get(w, WIN_SCRIPT_OPACITY);
 	out_layer->blur_opacity =
 	    (float)clamp(win_animatable_get(w, WIN_SCRIPT_BLUR_OPACITY), 0., 1.);
+	if (blur_method == BLUR_METHOD_DUAL_KAWASE ||
+	    blur_method == BLUR_METHOD_LIQUID_GLASS) {
+		const double screen_scale = min2((double)size.width / 1920.0,
+		                                 (double)size.height / 1080.0);
+		const double window_scale =
+		    ((double)w->widthb / 1920.0 + (double)w->heightb / 1080.0) / 2.0;
+		const double min_scale = clamp(blur_min_scale, 0.0, 1.0);
+		const double scale =
+		    screen_scale * (min_scale + (1.0 - min_scale) * clamp(window_scale, 0.0, 1.0));
+		out_layer->blur_scale = (float)scale;
+	} else {
+		out_layer->blur_scale = 1.0F;
+	}
 	out_layer->glass_strength = (float)w->glass.strength;
 	out_layer->glass_aberration = (float)w->glass.aberration;
 	out_layer->glass_distance = (float)w->glass.distance;
 	out_layer->glass_zoom = (float)w->glass.zoom;
+	out_layer->glass_saturation = (float)glass_saturation;
 	out_layer->glass_zoom_follow_mouse = glass_zoom_follow_mouse;
 	out_layer->glass_anchor = ivec2_as(glass_anchor);
+	out_layer->liquid_glass_no_dual_kawase = w_opts.liquid_glass_no_dual_kawase;
 	out_layer->shadow_color.red = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_RED);
 	out_layer->shadow_color.green = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_GREEN);
 	out_layer->shadow_color.blue = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_BLUE);
@@ -251,9 +268,11 @@ void layout_manager_free(struct layout_manager *lm) {
 //   above.
 
 void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
-                                  uint64_t root_pixmap_generation, ivec2 size,
-                                  double zoom_factor, ivec2 zoom_focal,
-                                  bool glass_zoom_follow_mouse, ivec2 glass_anchor) {
+                                   uint64_t root_pixmap_generation, ivec2 size,
+                                   double zoom_factor, ivec2 zoom_focal,
+                                   bool glass_zoom_follow_mouse, ivec2 glass_anchor,
+                                   double glass_saturation, double blur_min_scale,
+                                   enum blur_method blur_method) {
 	auto prev_layout = &lm->layouts[lm->current];
 	lm->current = (lm->current + 1) % lm->max_buffer_age;
 	auto layout = &lm->layouts[lm->current];
@@ -271,7 +290,8 @@ void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
 		dynarr_resize(layout->layers, rank + 1, layer_init, layer_deinit);
 		if (!layer_from_window(&layout->layers[rank], (struct win *)w, size,
 		                       zoom_factor, zoom_focal, glass_zoom_follow_mouse,
-		                       glass_anchor)) {
+		                       glass_anchor, glass_saturation, blur_min_scale,
+		                       blur_method)) {
 			continue;
 		}
 

@@ -499,6 +499,14 @@ bool renderer_render(struct renderer *r, struct backend_base *backend,
 	dynarr_resize(r->culled_masks, layout->number_of_commands, pixman_region32_init,
 	              pixman_region32_fini);
 	commands_cull_with_damage(layout, &damage_region, blur_size, r->culled_masks);
+	if (!pixman_region32_not_empty(&damage_region)) {
+		// Keep the layout history, but avoid preparing or presenting a frame when
+		// damage culling found no visible changes.
+		commands_uncull(layout);
+		pixman_region32_fini(&screen_region);
+		pixman_region32_fini(&damage_region);
+		return true;
+	}
 
 	auto now = get_time_timespec();
 	*after_damage_us = (uint64_t)now.tv_sec * 1000000UL + (uint64_t)now.tv_nsec / 1000;

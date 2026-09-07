@@ -170,6 +170,11 @@ void inspect_dump_window_maybe_options(struct window_maybe_options wopts) {
 		       wopts.blur_background == TRI_TRUE ? "true" : "false");
 		nothing = false;
 	}
+	if (wopts.liquid_glass_no_dual_kawase != TRI_UNKNOWN) {
+		printf("        liquid_glass_no_dual_kawase = %s\n",
+		       wopts.liquid_glass_no_dual_kawase == TRI_TRUE ? "true" : "false");
+		nothing = false;
+	}
 	if (wopts.invert_color != TRI_UNKNOWN) {
 		printf("        invert_color = %s\n",
 		       wopts.invert_color == TRI_TRUE ? "true" : "false");

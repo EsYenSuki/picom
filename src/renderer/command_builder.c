@@ -275,9 +275,12 @@ command_for_blur(struct layer *layer, struct backend_command *cmd,
 	}
 	cmd->blur = (struct backend_blur_args){
 	    .opacity = layer->blur_opacity,
+	    .dual_kawase_scale = layer->blur_scale,
+	    .liquid_glass_no_dual_kawase = layer->liquid_glass_no_dual_kawase,
 	    .liquid_glass_strength = (int)layer->glass_strength,
 	    .liquid_glass_aberration = (int)layer->glass_aberration,
 	    .liquid_glass_distance = (int)layer->glass_distance,
+	    .liquid_glass_saturation = layer->glass_saturation,
 	    .liquid_glass_zoom = layer->glass_zoom,
 	    .liquid_glass_zoom_follow_mouse = layer->glass_zoom_follow_mouse,
 	    .liquid_glass_anchor = layer->glass_anchor,

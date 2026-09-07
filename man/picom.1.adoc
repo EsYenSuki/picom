@@ -346,6 +346,9 @@ Within each sub-item, these keys are available: ::
   blur-background:::
 	Whether the background of the matching window should be blurred.
 
+  liquid-glass-no-dual-kawase:::
+	Whether the matching _liquid_glass_ window should skip the preliminary _dual_kawase_ blur. Refraction and chromatic aberration remain enabled.
+
   invert-color:::
 	Whether to invert the color of the matching window.
 
@@ -932,11 +935,20 @@ Available options of the _blur_ section are: ::
   *strength*:::
     An integer in the range 0-20. The strength of the _dual_kawase_ blur method. Corresponds to the *--blur-strength* command line option. If set to zero, the value requested by *--blur-size* is approximated (default: 5).
 
+  *min-scale*:::
+    A floating point number from 0 to 1. Sets the minimum scale applied to the dual-kawase sampling used by _dual_kawase_ and _liquid_glass_ blur based on the window size. The window-size scale is mapped from 0--100% to this value--100%; for example, 0.5 maps small windows to 50% and reference-size windows to 100% (default: 0.0).
+
   *liquid-glass-strength-focus*, *liquid-glass-strength-unfocus*:::
-    Integers. The strength, in pixels at 1920x1080, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Values scale with the root window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
+    Integers. The strength, in pixels at 1920x1080, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Values scale with the root window size and the window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
 
   *liquid-glass-distance-focus*, *liquid-glass-distance-unfocus*:::
-    Integers. The distance, in pixels at 1920x1080, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Values scale with the root window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
+    Integers. The distance, in pixels at 1920x1080, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Values scale with the root window size and the window size using the smaller width or height ratio. The distance is clamped independently to each half of the window, so shallow windows still show top/bottom stretching. Transitions between the two values are animated (default: 100 / 50).
+
+  *liquid-glass-min-scale*:::
+    A floating point number from 0 to 1. Sets the minimum scale applied to liquid-glass strength and distance based on the window size. The window-size scale is mapped from 0--100% to this value--100%; for example, 0.5 maps small windows to 50% and reference-size windows to 100% (default: 0.0).
+
+  *liquid-glass-saturation*:::
+    A floating point number. Multiplies the saturation of the final _liquid_glass_ color. A value of 1.0 leaves saturation unchanged, values above 1.0 boost it, and 0.0 produces grayscale (default: 1.0).
 
   *liquid-glass-transition-duration*:::
     An integer. Duration of the focus/unfocus transition of the liquid glass parameters, in milliseconds (default: 200).
@@ -951,7 +963,11 @@ Available options of the _blur_ section are: ::
     A boolean. If true, the anchor point of the _liquid_glass_ zoom follows the mouse cursor instead of staying at the center of the window. Corresponds to the *--liquid-glass-zoom-follow-mouse* command line option (default: false).
 
   *liquid-glass-curve*:::
-    Floating point cubic-bezier control points for the liquid glass edge easing curve, as an array or comma-separated list `x1, y1, x2, y2`, i.e. `cubic-bezier(x1, y1, x2, y2)` (default: `1.0, 0.1, 1.0, 0.1`).
+     Floating point cubic-bezier control points for the liquid glass edge easing curve, as an array or comma-separated list `x1, y1, x2, y2`, i.e. `cubic-bezier(x1, y1, x2, y2)` (default: `1.0, 0.1, 1.0, 0.1`).
+
+Window rules may also set *liquid-glass-no-dual-kawase* to a boolean. When true,
+the matching window skips the preliminary _dual_kawase_ blur while retaining
+liquid-glass refraction and chromatic aberration (default: false).
 
 
   *kernel*:::

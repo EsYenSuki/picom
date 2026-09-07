@@ -166,20 +166,80 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 /// @param vao two vertex array objects.
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
-bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
-	                         int glass_aberration, float glass_zoom, vec2 glass_anchor,
-                         bool glass_zoom_follow_mouse, struct gl_blur_context *bctx,
+bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int glass_strength,
+                          int glass_distance, int glass_aberration, float glass_zoom,
+                          float glass_saturation, vec2 glass_anchor,
+                          bool glass_zoom_follow_mouse, bool no_dual_kawase,
+                          struct gl_blur_context *bctx,
                          const struct backend_mask_image *mask, vec2 mask_scale,
                          const GLuint vao[2], const int vao_nelems[2],
                          struct gl_texture *source, GLuint blur_sampler, GLuint target_fbo,
-                         GLuint default_mask) {
+                          GLuint default_mask) {
 	int iterations = bctx->blur_texture_count;
 	int scale_factor = 1;
+
+	if (no_dual_kawase && bctx->method == BLUR_METHOD_LIQUID_GLASS) {
+		// Use the original source for liquid-glass displacement and aberration.
+		auto up_pass = &bctx->blur_shader[1];
+		assert(up_pass->prog);
+		glUseProgram(up_pass->prog);
+		// A zero sampling offset turns the liquid-glass filter into a direct
+		// source sample while preserving refraction and aberration offsets.
+		glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, 0.0F);
+		glUniform1f(UNIFORM_LIQUID_GLASS_SOURCE_SCALE_LOC, 1.0F);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, source->texture);
+		glBindSampler(0, blur_sampler);
+		glActiveTexture(GL_TEXTURE1);
+		if (mask != NULL) {
+			auto inner = (struct gl_texture *)mask->image;
+			glBindTexture(GL_TEXTURE_2D, inner->texture);
+			glUniform1i(UNIFORM_MASK_INVERTED_LOC, mask->inverted);
+			glUniform1f(UNIFORM_MASK_CORNER_RADIUS_LOC, (float)mask->corner_radius);
+			glUniform2f(UNIFORM_MASK_OFFSET_LOC, (float)mask->origin.x,
+			            (float)mask->origin.y);
+			glUniform2f(UNIFORM_MASK_SCALE_LOC, (float)mask_scale.x,
+			            (float)mask_scale.y);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, default_mask);
+			glUniform1i(UNIFORM_MASK_INVERTED_LOC, 0);
+			glUniform1f(UNIFORM_MASK_CORNER_RADIUS_LOC, 0.0F);
+			glUniform2f(UNIFORM_MASK_OFFSET_LOC, 0.0F, 0.0F);
+			glUniform2f(UNIFORM_MASK_SCALE_LOC, 1.0F, 1.0F);
+		}
+		glUniform1i(UNIFORM_MASK_TEX_LOC, 1);
+		glUniform1f(UNIFORM_OPACITY_LOC, (float)opacity);
+		glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
+		glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
+		glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
+		glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, (float)glass_aberration);
+		glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
+		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
+		glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, glass_saturation);
+		glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC,
+		            glass_zoom_follow_mouse ? 1 : 0);
+		glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, (GLfloat)glass_anchor.x,
+		            (GLfloat)glass_anchor.y);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X1_LOC, bctx->liquid_glass_curve[0]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC, bctx->liquid_glass_curve[1]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X2_LOC, bctx->liquid_glass_curve[2]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y2_LOC, bctx->liquid_glass_curve[3]);
+		glUniform1f(UNIFORM_SCALE_LOC, 1.0F);
+		glUniform2f(UNIFORM_PIXEL_NORM_LOC, 1.0F / (GLfloat)source->width,
+		            1.0F / (GLfloat)source->height);
+		glBindVertexArray(vao[0]);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fbo);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDrawElements(GL_TRIANGLES, vao_nelems[0], GL_UNSIGNED_INT, NULL);
+		return true;
+	}
 
 	// Kawase downsample pass
 	auto down_pass = &bctx->blur_shader[0];
 	assert(down_pass->prog);
 	glUseProgram(down_pass->prog);
+	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, dual_kawase_scale);
 
 	glBindVertexArray(vao[1]);
 	int nelems = vao_nelems[1];
@@ -225,6 +285,8 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 	auto up_pass = &bctx->blur_shader[1];
 	assert(up_pass->prog);
 	glUseProgram(up_pass->prog);
+	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, dual_kawase_scale);
+	glUniform1f(UNIFORM_LIQUID_GLASS_SOURCE_SCALE_LOC, 0.5F);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, default_mask);
@@ -242,6 +304,7 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 		// The liquid-glass shader is reused for intermediate upsample passes.
 		// Keep its zoom neutral until the final compositing pass below.
 		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, 1.0F);
+		glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, 1.0F);
 		glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC, 0);
 		glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, 0.0F, 0.0F);
 
@@ -293,6 +356,7 @@ bool gl_dual_kawase_blur(double opacity, int glass_strength, int glass_distance,
 			glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, (float)glass_aberration);
 			glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
 			glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
+			glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, glass_saturation);
 			glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC,
 			            glass_zoom_follow_mouse ? 1 : 0);
 			glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC,
@@ -453,10 +517,13 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	if (bctx->method == BLUR_METHOD_DUAL_KAWASE ||
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
-		    args->opacity, args->liquid_glass_strength, args->liquid_glass_distance,
-		    args->liquid_glass_aberration, (float)args->liquid_glass_zoom,
+		    args->opacity, (float)args->dual_kawase_scale, args->liquid_glass_strength,
+		    args->liquid_glass_distance,
+			args->liquid_glass_aberration, (float)args->liquid_glass_zoom,
+		    (float)args->liquid_glass_saturation,
 		    args->liquid_glass_anchor,
-		    args->liquid_glass_zoom_follow_mouse, bctx, args->source_mask,
+		    args->liquid_glass_zoom_follow_mouse, args->liquid_glass_no_dual_kawase, bctx,
+		    args->source_mask,
 		    args->source_mask_scale, gd->vertex_array_objects, vao_nelems, source,
 		    gd->samplers[GL_SAMPLER_BLUR], target_fbo, gd->default_mask_texture);
 	} else {
@@ -770,12 +837,14 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform sampler2D tex_src;
 			layout(location = UNIFORM_SCALE_LOC)
 			uniform float scale = 1.0;
+			layout(location = UNIFORM_DUAL_KAWASE_SCALE_LOC)
+			uniform float dual_kawase_scale = 1.0;
 			layout(location = UNIFORM_PIXEL_NORM_LOC)
 			uniform vec2 pixel_norm;
 			in vec2 texcoord;
 			out vec4 out_color;
 			void main() {
-				vec2 offset = %.7g * pixel_norm;
+				vec2 offset = %.7g * dual_kawase_scale * pixel_norm;
 				vec2 uv = texcoord * pixel_norm * (2.0 / scale);
 				vec4 sum = texture2D(tex_src, uv) * 4.0;
 				sum += texture2D(tex_src, uv - vec2(0.5, 0.5) * offset);
@@ -821,6 +890,10 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform sampler2D tex_src;
 			layout(location = UNIFORM_SCALE_LOC)
 			uniform float scale = 1.0;
+			layout(location = UNIFORM_DUAL_KAWASE_SCALE_LOC)
+			uniform float dual_kawase_scale = 1.0;
+			layout(location = UNIFORM_LIQUID_GLASS_SOURCE_SCALE_LOC)
+			uniform float liquid_glass_source_scale = 0.5;
 			layout(location = UNIFORM_PIXEL_NORM_LOC)
 			uniform vec2 pixel_norm;
 			layout(location = UNIFORM_OPACITY_LOC)
@@ -833,6 +906,8 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform int liquid_glass_strength;
 			layout(location = UNIFORM_LIQUID_GLASS_ABERRATION_LOC)
 			uniform float liquid_glass_aberration;
+			layout(location = UNIFORM_LIQUID_GLASS_SATURATION_LOC)
+			uniform float liquid_glass_saturation;
 			layout(location = UNIFORM_LIQUID_GLASS_DISTANCE_LOC)
 			uniform int liquid_glass_distance;
 			layout(location = UNIFORM_LIQUID_GLASS_ZOOM_LOC)
@@ -893,14 +968,16 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 				       3.0 * omt * t * t * liquid_glass_curve_y2 + t * t * t;
 			}
 			void main() {
-				vec2 offset = %.7g * pixel_norm;
-				vec2 uv = perturb(texcoord, noise_radius, noise_scale) * pixel_norm / (2 * scale);
+				vec2 offset = %.7g * dual_kawase_scale * pixel_norm;
+				vec2 uv = perturb(texcoord, noise_radius, noise_scale) * pixel_norm * liquid_glass_source_scale / scale;
 				%s
 				vec4 base_color = liquid_glass_blur(uv, offset);
 				vec4 red_color = liquid_glass_blur(uv + aberration_offset, offset);
 				vec4 blue_color = liquid_glass_blur(uv - aberration_offset, offset);
-				out_color = vec4(red_color.r, base_color.g, blue_color.b, base_color.a) *
-				            opacity * mask_factor();
+				vec4 color = vec4(red_color.r, base_color.g, blue_color.b, base_color.a);
+				float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+				color.rgb = mix(vec3(luminance), color.rgb, liquid_glass_saturation);
+				out_color = color * opacity * mask_factor();
 			}
 		);
 		// clang-format on
@@ -916,13 +993,17 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                  // Move the SIDE cutting point independently.
                                  // < 1.0 = closer to the edge
                                  // > 1.0 = farther toward the center
-                                 "float side_cut = edge_width * 1;\n"
+                                  // A window can be much smaller than the configured edge
+                                  // distance on one axis. Clamp each axis independently so
+                                  // shallow windows still get a visible top/bottom stretch.
+                                  "vec2 side_cut = min(vec2(edge_width), half_size);\n"
 
                                  "vec2 inner_bounds = max(half_size - side_cut, vec2(0.0));\n"
                                  "vec2 overstep = max(abs(centered) - inner_bounds, vec2(0.0));\n"
 
                                  // Corner cutting point stays independent.
-                                 "vec2 corner_inner_bounds = max(half_size - edge_width * 0.5, vec2(0.0));\n"
+                                  "vec2 corner_cut = min(vec2(edge_width * 0.5), half_size);\n"
+                                  "vec2 corner_inner_bounds = max(half_size - corner_cut, vec2(0.0));\n"
                                  "vec2 corner_overstep = max(abs(centered) - corner_inner_bounds, vec2(0.0));\n"
 
                                  "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm / (2.0 * scale);\n"
@@ -932,13 +1013,13 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                  "}\n"
                                  "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
 
-                                 "float horizontal_progress = smoothstep(0.0, side_cut, overstep.x);\n"
-                                 "float vertical_progress = smoothstep(0.0, side_cut, overstep.y);\n"
+                                  "float horizontal_progress = smoothstep(0.0, side_cut.x, overstep.x);\n"
+                                  "float vertical_progress = smoothstep(0.0, side_cut.y, overstep.y);\n"
 
                                  "horizontal_progress = liquid_glass_bezier(clamp(horizontal_progress, 0.0, 1.0));\n"
                                  "vertical_progress = liquid_glass_bezier(clamp(vertical_progress, 0.0, 1.0));\n"
 
-                                 "float corner_progress = smoothstep(0.0, edge_width * 1, min(corner_overstep.x, corner_overstep.y));\n"
+                                  "float corner_progress = smoothstep(0.0, min(corner_cut.x, corner_cut.y), min(corner_overstep.x, corner_overstep.y));\n"
                                  "corner_progress = liquid_glass_bezier(clamp(corner_progress, 0.0, 1.0));\n"
 
                                  "vec2 horizontal_direction = vec2(-sign(centered.x), 0.0);\n"

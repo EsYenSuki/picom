@@ -1686,18 +1686,24 @@ double win_animatable_get(const struct win *w, enum win_script_output output) {
 bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) {
 	const auto o = &ps->o;
 	// Scale pixel-based liquid-glass values from the 1920x1080 reference
-	// resolution. Liquid-glass zoom values are intentionally not scaled.
+	// resolution and the individual window size. The minimum scale maps the
+	// window-size range from [0, 1] to [min_scale, 1].
 	const double screen_scale = min2((double)ps->root_width / 1920.0,
 	                                 (double)ps->root_height / 1080.0);
+	const double window_scale =
+	    ((double)w->widthb / 1920.0 + (double)w->heightb / 1080.0) / 2.0;
+	const double min_scale = clamp(o->liquid_glass_min_scale, 0.0, 1.0);
+	const double glass_scale = screen_scale *
+	                           (min_scale + (1.0 - min_scale) * clamp(window_scale, 0.0, 1.0));
 	double target_strength = w->is_focused ? o->liquid_glass_strength_focus
 	                                       : o->liquid_glass_strength_unfocus;
 	double target_aberration = w->is_focused ? o->liquid_glass_aberration_focus
 	                                         : o->liquid_glass_aberration_unfocus;
 	double target_distance = w->is_focused ? o->liquid_glass_distance_focus
 	                                       : o->liquid_glass_distance_unfocus;
-	target_strength *= screen_scale;
-	target_aberration *= screen_scale;
-	target_distance *= screen_scale;
+	target_strength *= glass_scale;
+	target_aberration *= glass_scale;
+	target_distance *= glass_scale;
 	auto target_zoom =
 	    w->is_focused ? o->liquid_glass_zoom_focus : o->liquid_glass_zoom_unfocus;
 

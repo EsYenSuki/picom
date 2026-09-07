@@ -122,6 +122,8 @@ static inline void command_blur_damage(region_t *damage, region_t *scratch_regio
                                        struct backend_command *cmd1,
                                        struct backend_command *cmd2, ivec2 blur_size) {
 	if (cmd1->blur.opacity != cmd2->blur.opacity ||
+	    cmd1->blur.dual_kawase_scale != cmd2->blur.dual_kawase_scale ||
+	    cmd1->blur.liquid_glass_no_dual_kawase != cmd2->blur.liquid_glass_no_dual_kawase ||
 	    cmd1->blur.liquid_glass_strength != cmd2->blur.liquid_glass_strength ||
 	    cmd1->blur.liquid_glass_aberration != cmd2->blur.liquid_glass_aberration ||
 	    cmd1->blur.liquid_glass_distance != cmd2->blur.liquid_glass_distance ||

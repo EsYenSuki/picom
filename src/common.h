@@ -80,6 +80,8 @@ typedef struct session {
 	ev_timer unredir_timer;
 	/// Use an ev_timer callback for drawing
 	ev_timer draw_timer;
+	/// Poll pointer position while liquid-glass mouse-follow is active
+	ev_timer glass_pointer_timer;
 	/// Called every time we have timeouts or new data on socket,
 	/// so we can be sure if xcb read from X socket at anytime during event
 	/// handling, we will not left any event unhandled in the queue
