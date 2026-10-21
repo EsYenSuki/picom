@@ -659,6 +659,7 @@ bool parse_config(options_t *opt, const char *config_file) {
 	    .unredir_if_possible_delay = 0,
 	    .redirected_force = UNSET,
 	    .stoppaint_force = UNSET,
+	    .desktop_capture = false,
 	    .dbus = false,
 	    .benchmark = 0,
 	    .benchmark_wid = XCB_NONE,

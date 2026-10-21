@@ -27,6 +27,9 @@
 
 void root_damaged(session_t *ps);
 
+void cursor_handle_motion(session_t *ps, const xcb_motion_notify_event_t *ev);
+void cursor_handle_image_change(session_t *ps);
+
 void queue_redraw(session_t *ps);
 
 void configure_root(session_t *ps);

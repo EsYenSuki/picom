@@ -100,6 +100,7 @@ static inline xcb_window_t attr_pure ev_window(session_t *ps, xcb_generic_event_
 	case XCB_CIRCULATE_NOTIFY: return ((xcb_circulate_notify_event_t *)ev)->window;
 	case XCB_EXPOSE: return ((xcb_expose_event_t *)ev)->window;
 	case XCB_PROPERTY_NOTIFY: return ((xcb_property_notify_event_t *)ev)->window;
+	case XCB_MOTION_NOTIFY: return ((xcb_motion_notify_event_t *)ev)->event;
 	case XCB_CLIENT_MESSAGE: return ((xcb_client_message_event_t *)ev)->window;
 	default:
 		if (ps->c.e.damage_event + XCB_DAMAGE_NOTIFY == ev->response_type) {
@@ -796,6 +797,9 @@ void ev_handle(session_t *ps, xcb_generic_event_t *ev) {
 	switch (ev->response_type) {
 	case XCB_FOCUS_IN: ev_focus_in(ps, (xcb_focus_in_event_t *)ev); break;
 	case XCB_FOCUS_OUT: ev_focus_out(ps, (xcb_focus_out_event_t *)ev); break;
+	case XCB_MOTION_NOTIFY:
+		cursor_handle_motion(ps, (xcb_motion_notify_event_t *)ev);
+		break;
 	case XCB_CREATE_NOTIFY:
 		ev_create_notify(ps, (xcb_create_notify_event_t *)ev);
 		break;
@@ -821,6 +825,11 @@ void ev_handle(session_t *ps, xcb_generic_event_t *ev) {
 		ev_selection_clear(ps, (xcb_selection_clear_event_t *)ev);
 		break;
 	default:
+		if (ps->c.e.fixes_event &&
+		    ev->response_type == ps->c.e.fixes_event + XCB_XFIXES_CURSOR_NOTIFY) {
+			cursor_handle_image_change(ps);
+			break;
+		}
 		if (ps->c.e.has_shape && ev->response_type == ps->c.e.shape_event) {
 			ev_shape_notify(ps, (xcb_shape_notify_event_t *)ev);
 			break;

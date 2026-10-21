@@ -155,6 +155,7 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 	} else {
 		out_layer->blur_scale = 1.0F;
 	}
+	out_layer->blur_strength = w_opts.blur_strength;
 	out_layer->glass_strength = (float)w->glass.strength;
 	out_layer->glass_aberration = (float)w->glass.aberration;
 	out_layer->glass_distance = (float)w->glass.distance;

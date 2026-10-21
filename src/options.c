@@ -479,7 +479,8 @@ static const struct picom_option picom_options[] = {
     [800] = {"monitor-repaint"          , ENABLE(monitor_repaint)          , "Highlight the updated area of the screen. For debugging."},
     [801] = {"diagnostics"              , ENABLE(print_diagnostics)        , "Print diagnostic information"},
     [802] = {"debug-mode"               , ENABLE(debug_mode)               , "Render into a separate window, and don't take over the screen. Useful when "
-                                                                             "you want to attach a debugger to picom"},
+                                                                              "you want to attach a debugger to picom"},
+    [806] = {"desktop-capture"          , ENABLE(desktop_capture)           , "Expose the final composited desktop as a selectable X11 window"},
     [803] = {"no-ewmh-fullscreen"       , ENABLE(no_ewmh_fullscreen)       , "Do not use EWMH to detect fullscreen windows. Reverts to checking if a "
                                                                              "window is fullscreen based only on its size and coordinates."},
     [804] = {"realtime"                 , ENABLE(use_realtime_scheduling)  , "Enable realtime scheduling. This might reduce latency, but might also cause "

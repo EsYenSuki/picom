@@ -321,6 +321,7 @@ static const struct script_output_info win_script_outputs[] = {
 };
 
 static const struct window_maybe_options WIN_MAYBE_OPTIONS_DEFAULT = {
+	.blur_strength = -1,
     .blur_background = TRI_UNKNOWN,
     .liquid_glass_no_dual_kawase = TRI_UNKNOWN,
     .clip_shadow_above = TRI_UNKNOWN,
@@ -328,6 +329,7 @@ static const struct window_maybe_options WIN_MAYBE_OPTIONS_DEFAULT = {
     .fade = TRI_UNKNOWN,
     .invert_color = TRI_UNKNOWN,
     .paint = TRI_UNKNOWN,
+	.geometry_blend = TRI_UNKNOWN,
     .dim = NAN,
     .opacity = NAN,
     .blur_opacity = NAN,
@@ -354,12 +356,14 @@ static inline double __attribute__((always_inline, const)) number_or_d(double a,
 static inline struct window_maybe_options __attribute__((always_inline, const))
 win_maybe_options_fold(struct window_maybe_options upper, struct window_maybe_options lower) {
 	struct window_maybe_options ret = {
+	    .blur_strength = upper.blur_strength >= 0 ? upper.blur_strength : lower.blur_strength,
 	    .unredir = upper.unredir == WINDOW_UNREDIR_INVALID ? lower.unredir : upper.unredir,
 	    .blur_background = tri_or(upper.blur_background, lower.blur_background),
 	    .liquid_glass_no_dual_kawase =
 	        tri_or(upper.liquid_glass_no_dual_kawase, lower.liquid_glass_no_dual_kawase),
 	    .clip_shadow_above = tri_or(upper.clip_shadow_above, lower.clip_shadow_above),
 	    .full_shadow = tri_or(upper.full_shadow, lower.full_shadow),
+	    .geometry_blend = tri_or(upper.geometry_blend, lower.geometry_blend),
 	    .shadow = tri_or(upper.shadow, lower.shadow),
 	    .fade = tri_or(upper.fade, lower.fade),
 	    .invert_color = tri_or(upper.invert_color, lower.invert_color),
@@ -384,12 +388,14 @@ static inline struct window_options __attribute__((always_inline, const))
 win_maybe_options_or(struct window_maybe_options maybe, struct window_options def) {
 	assert(def.unredir != WINDOW_UNREDIR_INVALID);
 	struct window_options ret = {
+	    .blur_strength = maybe.blur_strength >= 0 ? maybe.blur_strength : def.blur_strength,
 	    .unredir = maybe.unredir == WINDOW_UNREDIR_INVALID ? def.unredir : maybe.unredir,
 	    .blur_background = tri_or_bool(maybe.blur_background, def.blur_background),
 	    .liquid_glass_no_dual_kawase =
 	        tri_or_bool(maybe.liquid_glass_no_dual_kawase, def.liquid_glass_no_dual_kawase),
 	    .clip_shadow_above = tri_or_bool(maybe.clip_shadow_above, def.clip_shadow_above),
 	    .full_shadow = tri_or_bool(maybe.full_shadow, def.full_shadow),
+	    .geometry_blend = tri_or_bool(maybe.geometry_blend, def.geometry_blend),
 	    .shadow = tri_or_bool(maybe.shadow, def.shadow),
 	    .corner_radius = maybe.corner_radius >= 0 ? (unsigned int)maybe.corner_radius
 	                                              : def.corner_radius,

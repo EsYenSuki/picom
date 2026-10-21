@@ -147,6 +147,23 @@ OPTIONS
 	    * If a window requests to bypass the compositor (__NET_WM_BYPASS_COMPOSITOR_).
 	Windows are also unredirected unconditionally when monitors are powered off, regardless if *--unredir-if-possible* is set.
 
+*--desktop-capture*::
+	Create a fullscreen, input-transparent X11 window named `Picom Composite Desktop` containing the final composited desktop. This window can be selected by screen-sharing applications that support X11 window capture. Its class is `picom-desktop-capture` / `picom`.
+
+=== Composite Overlay Capture
+
+When picom is using the X Composite overlay, the overlay is given a stable X11
+identity so XComposite-aware screen-sharing clients can select the final
+composited desktop. Its properties are:
+
+* Window name: `Picom Composite Desktop`
+* Window class: `picom-composite-overlay` / `picom`
+* Window type: `_NET_WM_WINDOW_TYPE_NORMAL`
+
+The overlay remains an internal compositor window and is not managed or painted
+as an ordinary application window by picom. Clients that only list windows
+managed by the window manager may not show it.
+
 
 *--unredir-if-possible-delay* _MILLISECONDS_::
 	Delay before unredirecting the window, in milliseconds. Defaults to 0.
@@ -258,6 +275,9 @@ May also be one of the predefined kernels: `3x3box` (default), `5x5box`, `7x7box
 *--zoom* _VALUE_::
 	Zoom control. If a picom instance is already running, send the command to it over its control socket (`/tmp/picom-$DISPLAY.sock`) and exit. Otherwise start normally and animate to _VALUE_ on startup. _VALUE_ is an absolute zoom factor (e.g. `1.5`), or a relative change prefixed with `+` or `-` (e.g. `+0.2`). Zoom centers on the mouse cursor; docks, menus, tooltips, override-redirect windows and fullscreen windows are not scaled.
 
+*picom cursor on* / *picom cursor off* / *picom cursor toggle*::
+	Enable, disable, or toggle Picom's compositor-rendered cursor. When enabled, Picom hides the X11 cursor and displays a captured cursor image above the composited desktop. The command is sent to the running Picom instance and exits.
+
 *--zoom-duration* _MS_::
 	Duration of the zoom animation in milliseconds. (default: 470)
 
@@ -360,6 +380,9 @@ Within each sub-item, these keys are available: ::
 
   transparent-clipping:::
 	Whether to make the matching window clip other windows like opaque windows do, instead of blending on top of them. When applied to transparent windows, this means nothing will be painted under the transparent parts of the window, essentially cuts a hole in the screen.
+
+  geometry-blend:::
+	Whether to blend the matching window's saved content during geometry-change animations. Set this to `false` to disable the experimental saved-image blending while keeping the geometry animation itself. Defaults to `true`.
 
   shader:::
 	GLSL fragment shader specification for rendering window contents. See section xref:_shader_interface[*SHADER INTERFACE*] below for more details on the interface. This option can be a simple path to the shader file, but it's also possible to specify extra options to the shader. Currently, the only extra options supported are macro defines. Syntax:

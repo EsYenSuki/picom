@@ -656,6 +656,7 @@ static const struct {
 	 offsetof(struct window_maybe_options, liquid_glass_no_dual_kawase)},
     {"clip-shadow-above", offsetof(struct window_maybe_options, clip_shadow_above)},
     {"transparent-clipping", offsetof(struct window_maybe_options, transparent_clipping)},
+	{"geometry-blend", offsetof(struct window_maybe_options, geometry_blend)},
 };
 
 static struct shader_specification *
@@ -766,6 +767,16 @@ parse_rule(struct list_node *rules, config_setting_t *setting, const char *inclu
 	}
 	if (config_setting_lookup_int(setting, "corner-radius", &ival)) {
 		wopts->corner_radius = ival;
+	}
+	if (config_setting_lookup_int(setting, "blur-strength", &ival)) {
+		if (ival < 0 || ival > 20) {
+			log_error("Invalid blur-strength at line %d. It must be between 0 and 20.",
+			          config_setting_source_line(setting));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->blur_strength = ival;
 	}
 	if (config_setting_lookup_string(setting, "shadow-color", &sval)) {
 		wopts->is_shadow_color_set = true;

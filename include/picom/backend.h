@@ -133,6 +133,8 @@ struct backend_blur_args {
 	double opacity;
 	/// Per-command scale applied to dual-kawase blur sampling offsets.
 	double dual_kawase_scale;
+	/// Per-command dual-kawase strength; -1 means use the context default.
+	int dual_kawase_strength;
 	/// Skip the preliminary dual-kawase blur for this liquid-glass draw.
 	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass edge stretching for this draw

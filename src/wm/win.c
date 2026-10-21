@@ -1220,7 +1220,8 @@ struct win *win_maybe_allocate(session_t *ps, struct wm_ref *cursor,
 	};
 
 	// Reject overlay window
-	if (wm_ref_win_id(cursor) == ps->overlay) {
+	if (wm_ref_win_id(cursor) == ps->overlay ||
+	    wm_ref_win_id(cursor) == ps->capture_window) {
 		// Would anyone reparent windows to the overlay window? Doing this
 		// just in case.
 		return NULL;
@@ -1648,12 +1649,15 @@ win_script_context_prepare(struct session *ps, struct win *w) {
 }
 
 double win_animatable_get(const struct win *w, enum win_script_output output) {
+	auto wopts = win_options(w);
+	if (output == WIN_SCRIPT_SAVED_IMAGE_BLEND && !wopts.geometry_blend) {
+		return 0;
+	}
 	if (w->running_animation_instance && w->running_animation.output_indices[output] >= 0) {
 		return w->running_animation_instance
 		    ->memory[w->running_animation.output_indices[output]];
 	}
 
-	auto wopts = win_options(w);
 	switch (output) {
 	case WIN_SCRIPT_BLUR_OPACITY: return win_get_blur_opacity(w);
 	case WIN_SCRIPT_OPACITY:
@@ -1951,7 +1955,9 @@ bool win_process_animation_and_state_change(struct session *ps, struct win *w, d
 		w->workspace_change_triggered = true;
 	}
 
-	if (win_check_flags_any(w, WIN_FLAGS_PIXMAP_STALE)) {
+	if (!wopts.geometry_blend) {
+		win_release_saved_win_image(ps->backend_data, w);
+	} else if (win_check_flags_any(w, WIN_FLAGS_PIXMAP_STALE)) {
 		// Grab the old pixmap, animations might need it
 		if (w->saved_win_image) {
 			win_release_saved_win_image(ps->backend_data, w);

@@ -429,9 +429,11 @@ bool renderer_render(struct renderer *r, struct backend_base *backend,
                      void *blur_context, uint64_t render_start_us,
                      xcb_sync_fence_t xsync_fence, bool use_damage, bool monitor_repaint,
                      bool force_blend, bool blur_frame, bool inactive_dim_fixed,
-                     double max_brightness, const struct x_monitors *monitors,
-                     const struct shader_info *root_pixmap_shader,
-                     const struct shader_info *shaders, uint64_t *after_damage_us) {
+                      double max_brightness, const struct x_monitors *monitors,
+                      const struct shader_info *root_pixmap_shader,
+                      const struct shader_info *shaders, image_handle cursor_image,
+                      ivec2 cursor_position, ivec2 cursor_size,
+                      uint64_t *after_damage_us) {
 	if (xsync_fence != XCB_NONE) {
 		// Trigger the fence but don't immediately wait on it. Let it run
 		// concurrent with our CPU tasks to save time.
@@ -564,6 +566,27 @@ bool renderer_render(struct renderer *r, struct backend_base *backend,
 		};
 		log_trace("Blit for monitor repaint");
 		backend->ops.blit(backend, (ivec2){}, r->back_image, &blit);
+	}
+
+	// The compositor cursor is deliberately drawn last, after all window and
+	// monitor effects. Its damage is supplied by the caller through the normal
+	// full repaint path whenever its position or image changes.
+	if (cursor_image != NULL) {
+		region_t cursor_region;
+		pixman_region32_init_rect(&cursor_region, cursor_position.x, cursor_position.y,
+		                          (unsigned)cursor_size.width,
+		                          (unsigned)cursor_size.height);
+		struct backend_blit_args cursor_blit = {
+		    .source_image = cursor_image,
+		    .max_brightness = 1,
+		    .tint = {1, 1, 1, 1},
+		    .effective_size = cursor_size,
+		    .source_mask = NULL,
+		    .target_mask = &cursor_region,
+		    .scale = SCALE_IDENTITY,
+		};
+		backend->ops.blit(backend, cursor_position, r->back_image, &cursor_blit);
+		pixman_region32_fini(&cursor_region);
 	}
 
 	backend->ops.copy_area_quantize(backend, (ivec2){}, backend->ops.back_buffer(backend),

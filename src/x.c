@@ -292,6 +292,7 @@ bool x_extensions_init(struct x_connection *c) {
 	}
 
 	c->e.fixes_error = extension->first_error;
+	c->e.fixes_event = extension->first_event;
 
 	// According to the X Fixes extension's specification:
 	// "The client must negotiate the version of the extension before executing

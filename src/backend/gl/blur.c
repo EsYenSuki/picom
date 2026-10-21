@@ -43,6 +43,7 @@ struct gl_blur_context {
 	/// sizing damage regions.
 	int liquid_glass_strength;
 	int liquid_glass_distance;
+	int dual_kawase_strength;
 	float liquid_glass_curve[4];
 
 	int npasses;
@@ -166,7 +167,8 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 /// @param vao two vertex array objects.
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
-bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int glass_strength,
+bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int kawase_strength,
+                         int glass_strength,
                           int glass_distance, int glass_aberration, float glass_zoom,
                           float glass_saturation, vec2 glass_anchor,
                           bool glass_zoom_follow_mouse, bool no_dual_kawase,
@@ -175,7 +177,20 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int glass_stre
                          const GLuint vao[2], const int vao_nelems[2],
                          struct gl_texture *source, GLuint blur_sampler, GLuint target_fbo,
                           GLuint default_mask) {
-	int iterations = bctx->blur_texture_count;
+	static const int strength_iterations[20] = {
+	    1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5};
+	static const float strength_offsets[20] = {
+	    1.25F, 2.25F, 2.00F, 3.00F, 4.25F, 2.50F, 3.25F, 4.25F, 5.50F, 3.25F,
+	    4.00F, 5.00F, 6.00F, 7.25F, 8.25F, 4.50F, 5.25F, 6.25F, 7.25F, 8.50F};
+	int selected_strength = kawase_strength > 0 ? kawase_strength : bctx->dual_kawase_strength;
+	selected_strength = clamp(selected_strength, 1, 20);
+	int iterations = strength_iterations[selected_strength - 1];
+	iterations = min2(iterations, bctx->blur_texture_count);
+	float strength_scale = dual_kawase_scale;
+	if (bctx->dual_kawase_strength > 0) {
+		strength_scale *= strength_offsets[selected_strength - 1] /
+		                  strength_offsets[bctx->dual_kawase_strength - 1];
+	}
 	int scale_factor = 1;
 
 	if (no_dual_kawase && bctx->method == BLUR_METHOD_LIQUID_GLASS) {
@@ -239,7 +254,7 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int glass_stre
 	auto down_pass = &bctx->blur_shader[0];
 	assert(down_pass->prog);
 	glUseProgram(down_pass->prog);
-	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, dual_kawase_scale);
+	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, strength_scale);
 
 	glBindVertexArray(vao[1]);
 	int nelems = vao_nelems[1];
@@ -285,7 +300,7 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int glass_stre
 	auto up_pass = &bctx->blur_shader[1];
 	assert(up_pass->prog);
 	glUseProgram(up_pass->prog);
-	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, dual_kawase_scale);
+	glUniform1f(UNIFORM_DUAL_KAWASE_SCALE_LOC, strength_scale);
 	glUniform1f(UNIFORM_LIQUID_GLASS_SOURCE_SCALE_LOC, 0.5F);
 
 	glActiveTexture(GL_TEXTURE1);
@@ -517,7 +532,8 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	if (bctx->method == BLUR_METHOD_DUAL_KAWASE ||
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
-		    args->opacity, (float)args->dual_kawase_scale, args->liquid_glass_strength,
+		    args->opacity, (float)args->dual_kawase_scale, args->dual_kawase_strength,
+		    args->liquid_glass_strength,
 		    args->liquid_glass_distance,
 			args->liquid_glass_aberration, (float)args->liquid_glass_zoom,
 		    (float)args->liquid_glass_saturation,
@@ -812,6 +828,7 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 	ctx->method = method;
 
 	auto blur_params = generate_dual_kawase_params(args);
+	ctx->dual_kawase_strength = ((struct dual_kawase_blur_args *)args)->strength;
 
 	// Specify required textures and FBOs
 	ctx->blur_texture_count = blur_params->iterations;

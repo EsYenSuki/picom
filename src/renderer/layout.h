@@ -38,6 +38,8 @@ struct layer {
 	float blur_opacity;
 	/// Window-size scale applied to dual-kawase blur sampling offsets
 	float blur_scale;
+	/// Per-window dual-kawase blur strength; -1 means use the global strength.
+	int blur_strength;
 	/// Whether this liquid-glass window skips the preliminary dual-kawase blur.
 	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass effect of this window

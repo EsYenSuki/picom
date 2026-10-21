@@ -229,6 +229,8 @@ enum window_unredir_option {
 struct shader_specification;
 
 struct window_maybe_options {
+	/// Strength of the dual-kawase blur, -1 means not set.
+	int blur_strength;
 	/// Shadow color
 	struct color shadow_color;
 
@@ -268,6 +270,8 @@ struct window_maybe_options {
 	enum window_unredir_option unredir;
 	/// Whether shadow should be rendered beneath this window.
 	enum tristate full_shadow;
+	/// Whether to blend the saved image during geometry animations.
+	enum tristate geometry_blend;
 	/// Whether shadow color is set
 	bool is_shadow_color_set;
 
@@ -277,6 +281,7 @@ struct window_maybe_options {
 
 /// Like `window_maybe_options`, but all fields are guaranteed to be set.
 struct window_options {
+	int blur_strength;
 	struct color shadow_color;
 	double opacity;
 	double blur_opacity;
@@ -293,6 +298,7 @@ struct window_options {
 	bool clip_shadow_above;
 	bool paint;
 	bool full_shadow;
+	bool geometry_blend;
 
 	struct win_script animations[ANIMATION_TRIGGER_COUNT];
 };
@@ -317,6 +323,8 @@ typedef struct options {
 	bool print_diagnostics;
 	/// Render to a separate window instead of taking over the screen
 	bool debug_mode;
+	/// Expose the final composited desktop as a selectable X11 window.
+	bool desktop_capture;
 	/// For picom-inspect only, dump windows in a loop
 	bool inspect_monitor;
 	xcb_window_t inspect_win;

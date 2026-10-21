@@ -82,6 +82,8 @@ typedef struct session {
 	ev_timer draw_timer;
 	/// Poll pointer position while liquid-glass mouse-follow is active
 	ev_timer glass_pointer_timer;
+	/// Fallback pointer-position update for the compositor-rendered cursor
+	ev_timer cursor_timer;
 	/// Called every time we have timeouts or new data on socket,
 	/// so we can be sure if xcb read from X socket at anytime during event
 	/// handling, we will not left any event unhandled in the queue
@@ -117,6 +119,10 @@ typedef struct session {
 	int root_height;
 	/// X Composite overlay window.
 	xcb_window_t overlay;
+	/// Optional X11 window containing the final composited desktop.
+	xcb_window_t capture_window;
+	/// Backend image bound to the capture window's pixmap.
+	image_handle capture_image;
 	/// The target window for debug mode
 	xcb_window_t debug_window;
 	/// The backend data the root pixmap bound to
@@ -231,6 +237,15 @@ typedef struct session {
 		ivec2 focal;
 		ivec2 prev_focal;
 	} zoom;
+	// === Compositor cursor ===
+	bool cursor_enabled;
+	xcb_pixmap_t cursor_pixmap;
+	image_handle cursor_image;
+	uint32_t cursor_serial;
+	bool cursor_image_dirty;
+	ivec2 cursor_size;
+	ivec2 cursor_hotspot;
+	ivec2 cursor_position;
 	/// Mouse cursor position used as the liquid glass zoom anchor, and its
 	/// value during the previous frame.
 	ivec2 glass_pointer;

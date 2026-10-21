@@ -243,6 +243,161 @@ static void glass_pointer_timer_callback(EV_P_ ev_timer *w, int revents attr_unu
 	queue_redraw(ps);
 }
 
+static void cursor_destroy_image(session_t *ps) {
+	if (ps->cursor_pixmap != XCB_NONE) {
+		xcb_free_pixmap(ps->c.c, ps->cursor_pixmap);
+		ps->cursor_pixmap = XCB_NONE;
+	}
+}
+
+static bool cursor_update_image(session_t *ps) {
+	if (ps->backend_data == NULL) {
+		return false;
+	}
+	auto image = XCB_AWAIT(xcb_xfixes_get_cursor_image, &ps->c);
+	if (!image) {
+		return false;
+	}
+	ivec2 position = {.x = (int)image->x - image->xhot,
+	                  .y = (int)image->y - image->yhot};
+	if (image->cursor_serial == ps->cursor_serial && ps->cursor_image != NULL) {
+		ps->cursor_image_dirty = false;
+		if (position.x != ps->cursor_position.x || position.y != ps->cursor_position.y) {
+			ps->cursor_position = position;
+			force_repaint(ps);
+		}
+		free(image);
+		return true;
+	}
+
+	ivec2 size = {.width = image->width, .height = image->height};
+	if (size.width == 0 || size.height == 0) {
+		free(image);
+		return false;
+	}
+	xcb_pixmap_t pixmap = x_create_pixmap(&ps->c, 32, size.width, size.height);
+	if (pixmap == XCB_NONE) {
+		free(image);
+		return false;
+	}
+	uint32_t length = (uint32_t)image->width * image->height * sizeof(uint32_t);
+	xcb_gcontext_t gc = x_new_id(&ps->c);
+	auto error = xcb_request_check(
+	    ps->c.c, xcb_create_gc_checked(ps->c.c, gc, pixmap, 0, NULL));
+	if (error != NULL) {
+		log_error_x_error(&ps->c, error, "Failed to create cursor upload GC");
+		free(error);
+		xcb_free_pixmap(ps->c.c, pixmap);
+		free(image);
+		return false;
+	}
+	error = xcb_request_check(
+	    ps->c.c, xcb_put_image_checked(
+	                 ps->c.c, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap, gc, image->width,
+	                 image->height, 0, 0, 0, 32, length,
+	                 (const uint8_t *)xcb_xfixes_get_cursor_image_cursor_image(image)));
+	xcb_free_gc(ps->c.c, gc);
+	if (error != NULL) {
+		log_error_x_error(&ps->c, error, "Failed to upload cursor image");
+		free(error);
+		xcb_free_pixmap(ps->c.c, pixmap);
+		free(image);
+		return false;
+	}
+
+	image_handle backend_image = ps->backend_data->ops.bind_pixmap(
+	    ps->backend_data, pixmap,
+	    x_get_visual_info(&ps->c, x_get_visual_for_standard(&ps->c, XCB_PICT_STANDARD_ARGB_32)));
+	if (backend_image == NULL) {
+		xcb_free_pixmap(ps->c.c, pixmap);
+		free(image);
+		return false;
+	}
+
+	if (ps->cursor_image != NULL) {
+		ps->backend_data->ops.release_image(ps->backend_data, ps->cursor_image);
+		ps->cursor_image = NULL;
+	}
+	cursor_destroy_image(ps);
+	ps->cursor_image = backend_image;
+	ps->cursor_pixmap = pixmap;
+	ps->cursor_serial = image->cursor_serial;
+	ps->cursor_size = size;
+	ps->cursor_hotspot = (ivec2){.x = image->xhot, .y = image->yhot};
+	ps->cursor_position = position;
+	ps->cursor_image_dirty = false;
+	force_repaint(ps);
+	free(image);
+	return true;
+}
+
+void cursor_handle_motion(session_t *ps, const xcb_motion_notify_event_t *ev) {
+	ivec2 pointer = {.x = ev->root_x, .y = ev->root_y};
+	ivec2 position = {.x = pointer.x - ps->cursor_hotspot.x,
+	                  .y = pointer.y - ps->cursor_hotspot.y};
+	if (ps->cursor_enabled &&
+	    (position.x != ps->cursor_position.x || position.y != ps->cursor_position.y)) {
+		ps->cursor_position = position;
+		force_repaint(ps);
+	}
+	if (glass_follow_active(ps) &&
+	    (pointer.x != ps->glass_pointer.x || pointer.y != ps->glass_pointer.y)) {
+		ps->glass_pointer = pointer;
+		queue_redraw(ps);
+	}
+}
+
+void cursor_handle_image_change(session_t *ps) {
+	if (ps->cursor_enabled) {
+		ps->cursor_image_dirty = true;
+		queue_redraw(ps);
+	}
+}
+
+static void cursor_timer_callback(EV_P_ ev_timer *w, int revents attr_unused) {
+	session_t *ps = session_ptr(w, cursor_timer);
+	if (!ps->cursor_enabled) {
+		ev_timer_stop(EV_A_ w);
+		return;
+	}
+
+	auto pointer = XCB_AWAIT(xcb_query_pointer, &ps->c, ps->c.screen_info->root);
+	if (!pointer) {
+		return;
+	}
+	ivec2 position = {.x = pointer->root_x - ps->cursor_hotspot.x,
+	                  .y = pointer->root_y - ps->cursor_hotspot.y};
+	free(pointer);
+	if (position.x != ps->cursor_position.x || position.y != ps->cursor_position.y) {
+		ps->cursor_position = position;
+		force_repaint(ps);
+	}
+}
+
+static void cursor_set_enabled(session_t *ps, bool enabled) {
+	if (ps->cursor_enabled == enabled) {
+		return;
+	}
+	if (enabled) {
+		ps->cursor_serial = 0;
+		ps->cursor_image_dirty = false;
+		if (!cursor_update_image(ps)) {
+			log_error("Failed to capture the X11 cursor");
+			return;
+		}
+		ps->cursor_enabled = true;
+		xcb_xfixes_hide_cursor(ps->c.c, ps->c.screen_info->root);
+		ev_timer_set(&ps->cursor_timer, 0, 1.0 / 120.0);
+		ev_timer_start(ps->loop, &ps->cursor_timer);
+	} else {
+		ps->cursor_enabled = false;
+		ev_timer_stop(ps->loop, &ps->cursor_timer);
+		xcb_xfixes_show_cursor(ps->c.c, ps->c.screen_info->root);
+		force_repaint(ps);
+	}
+	xcb_flush(ps->c.c);
+}
+
 static void glass_pointer_timer_update(session_t *ps) {
 	if (!glass_follow_active(ps)) {
 		if (ev_is_active(&ps->glass_pointer_timer)) {
@@ -273,6 +428,12 @@ static void zoom_socket_callback(EV_P_ ev_io *w, int revents attr_unused) {
 			target = val;
 		}
 		zoom_start_animation(ps, target);
+	} else if (strcmp(buf, "cursor on") == 0) {
+		cursor_set_enabled(ps, true);
+	} else if (strcmp(buf, "cursor off") == 0) {
+		cursor_set_enabled(ps, false);
+	} else if (strcmp(buf, "cursor toggle") == 0) {
+		cursor_set_enabled(ps, !ps->cursor_enabled);
 	}
 }
 
@@ -349,6 +510,50 @@ static void zoom_client_mode_argv(int argc, char *const *argv) {
 	}
 	printf("Zoom command '%s' sent to running picom instance (%s).\n", msg,
 	       socket_path);
+	exit(0);
+}
+
+/// Handle `picom cursor on|off` before initialization.
+static void cursor_client_mode_argv(int argc, char *const *argv) {
+	if (argc != 3 || strcmp(argv[1], "cursor") != 0 ||
+	    (strcmp(argv[2], "on") != 0 && strcmp(argv[2], "off") != 0 &&
+	     strcmp(argv[2], "toggle") != 0)) {
+		return;
+	}
+	const char *display = getenv("DISPLAY");
+	if (!display || !display[0]) {
+		display = ":0";
+	}
+	char safe[64];
+	int j = 0;
+	for (int i = 0; display[i] && j < 60; i++) {
+		safe[j++] = (display[i] == '/') ? '_' : display[i];
+	}
+	safe[j] = '\0';
+	char socket_path[108];
+	snprintf(socket_path, sizeof(socket_path), "/tmp/picom-%s.sock", safe);
+	struct sockaddr_un addr = {.sun_family = AF_UNIX};
+	size_t path_len = strlen(socket_path);
+	if (path_len >= sizeof(addr.sun_path)) {
+		path_len = sizeof(addr.sun_path) - 1;
+	}
+	memcpy(addr.sun_path, socket_path, path_len);
+	addr.sun_path[path_len] = '\0';
+	int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (fd < 0 || connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+		if (fd >= 0) close(fd);
+		fprintf(stderr, "No running picom instance found for %s.\n", display);
+		exit(1);
+	}
+	char msg[32];
+	snprintf(msg, sizeof(msg), "cursor %s", argv[2]);
+	if (send(fd, msg, strlen(msg), 0) <= 0) {
+		close(fd);
+		fprintf(stderr, "Failed to send cursor command to picom.\n");
+		exit(1);
+	}
+	close(fd);
+	printf("Cursor command '%s' sent to running picom instance.\n", msg);
 	exit(0);
 }
 
@@ -738,6 +943,14 @@ static void rebuild_screen_reg(session_t *ps) {
 
 /// Free up all the images and deinit the backend
 static void destroy_backend(session_t *ps) {
+	if (ps->cursor_enabled) {
+		cursor_set_enabled(ps, false);
+	}
+	if (ps->cursor_image != NULL && ps->backend_data != NULL) {
+		ps->backend_data->ops.release_image(ps->backend_data, ps->cursor_image);
+		ps->cursor_image = NULL;
+	}
+	cursor_destroy_image(ps);
 	wm_stack_foreach_safe(ps->wm, cursor, next_cursor) {
 		auto w = wm_ref_deref(cursor);
 		if (w == NULL) {
@@ -785,6 +998,14 @@ static void destroy_backend(session_t *ps) {
 	}
 
 	if (ps->backend_data) {
+		if (ps->capture_image) {
+			auto pixmap = ps->backend_data->ops.release_image(ps->backend_data,
+			                                                   ps->capture_image);
+			if (pixmap != XCB_NONE) {
+				xcb_free_pixmap(ps->c.c, pixmap);
+			}
+			ps->capture_image = NULL;
+		}
 		if (ps->renderer) {
 			renderer_free(ps->backend_data, ps->renderer);
 			ps->renderer = NULL;
@@ -1396,6 +1617,27 @@ static bool init_overlay(session_t *ps) {
 		ps->overlay = XCB_NONE;
 	}
 	if (ps->overlay != XCB_NONE) {
+		// Give the Composite overlay a stable identity so XComposite-aware
+		// screen-sharing clients can offer the final composited desktop.
+		static const char overlay_name[] = "Picom Composite Desktop";
+		static const char overlay_class[] = "picom-composite-overlay\0picom";
+		const uint32_t pid = (uint32_t)getpid();
+		const uint32_t overlay_name_len = (uint32_t)strlen(overlay_name);
+		xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->overlay,
+		                    ps->atoms->aWM_NAME, XCB_ATOM_STRING, 8,
+		                    overlay_name_len, overlay_name);
+		xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->overlay,
+		                    ps->atoms->a_NET_WM_NAME, ps->atoms->aUTF8_STRING, 8,
+		                    overlay_name_len, overlay_name);
+		xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->overlay,
+		                    ps->atoms->aWM_CLASS, XCB_ATOM_STRING, 8,
+		                    sizeof(overlay_class), overlay_class);
+		xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->overlay,
+		                    ps->atoms->a_NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, 32, 1,
+		                    &ps->atoms->a_NET_WM_WINDOW_TYPE_NORMAL);
+		xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->overlay,
+		                    ps->atoms->a_NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
+
 		// Set window region of the overlay window, code stolen from
 		// compiz-0.8.8
 		if (!XCB_AWAIT_VOID(xcb_shape_mask, &ps->c, XCB_SHAPE_SO_SET,
@@ -1427,6 +1669,53 @@ static bool init_overlay(session_t *ps) {
 	}
 	log_debug("overlay = %#010x", ps->overlay);
 
+	return true;
+}
+
+static bool init_capture_window(session_t *ps) {
+	ps->capture_window = x_new_id(&ps->c);
+	const uint32_t values[] = {0};
+	auto err = xcb_request_check(
+	    ps->c.c, xcb_create_window_checked(
+	                 ps->c.c, (uint8_t)ps->c.screen_info->root_depth, ps->capture_window,
+	                 ps->c.screen_info->root, 0, 0, to_u16_checked(ps->root_width),
+	                 to_u16_checked(ps->root_height), 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+	                 ps->c.screen_info->root_visual, XCB_CW_OVERRIDE_REDIRECT, values));
+	if (err) {
+		log_error_x_error(&ps->c, err, "Failed to create desktop capture window");
+		free(err);
+		ps->capture_window = XCB_NONE;
+		return false;
+	}
+
+	static const char name[] = "Picom Composite Desktop";
+	static const char wm_class[] = "picom-desktop-capture\0picom";
+	const uint32_t pid = (uint32_t)getpid();
+	const uint32_t name_len = (uint32_t)strlen(name);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->aWM_NAME, XCB_ATOM_STRING, 8, name_len, name);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->a_NET_WM_NAME, ps->atoms->aUTF8_STRING, 8, name_len, name);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->aWM_CLASS, XCB_ATOM_STRING, 8, sizeof(wm_class), wm_class);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->a_NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, 32, 1,
+	                    &ps->atoms->a_NET_WM_WINDOW_TYPE_NORMAL);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->a_NET_WM_STATE, XCB_ATOM_ATOM, 32, 1,
+	                    &ps->atoms->a_NET_WM_STATE_FULLSCREEN);
+	xcb_change_property(ps->c.c, XCB_PROP_MODE_REPLACE, ps->capture_window,
+	                    ps->atoms->a_NET_WM_PID, XCB_ATOM_CARDINAL, 32, 1, &pid);
+	if (!XCB_AWAIT_VOID(xcb_shape_rectangles, &ps->c, XCB_SHAPE_SO_SET,
+	                    XCB_SHAPE_SK_INPUT, XCB_CLIP_ORDERING_UNSORTED,
+	                    ps->capture_window, 0, 0, 0, NULL) ||
+	    !XCB_AWAIT_VOID(xcb_map_window, &ps->c, ps->capture_window)) {
+		log_error("Failed to initialize desktop capture window");
+		xcb_destroy_window(ps->c.c, ps->capture_window);
+		ps->capture_window = XCB_NONE;
+		return false;
+	}
+	log_info("Desktop capture window: %#010x", ps->capture_window);
 	return true;
 }
 
@@ -1471,6 +1760,37 @@ xcb_window_t session_get_target_window(session_t *ps) {
 	return ps->overlay != XCB_NONE ? ps->overlay : ps->c.screen_info->root;
 }
 
+static bool update_capture_image(session_t *ps, const region_t *region) {
+	if (!ps->o.desktop_capture || ps->capture_window == XCB_NONE ||
+	    ps->backend_data == NULL) {
+		return true;
+	}
+	if (ps->capture_image != NULL) {
+		auto old_pixmap = ps->backend_data->ops.release_image(ps->backend_data,
+		                                                     ps->capture_image);
+		if (old_pixmap != XCB_NONE) {
+			xcb_free_pixmap(ps->c.c, old_pixmap);
+		}
+		ps->capture_image = NULL;
+	}
+	auto pixmap = x_new_id(&ps->c);
+	auto err = xcb_request_check(
+	    ps->c.c, xcb_composite_name_window_pixmap_checked(ps->c.c, ps->capture_window, pixmap));
+	if (err) {
+		free(err);
+		return false;
+	}
+	ps->capture_image = ps->backend_data->ops.bind_pixmap(
+	    ps->backend_data, pixmap, x_get_visual_info(&ps->c, ps->c.screen_info->root_visual));
+	if (ps->capture_image == NULL) {
+		xcb_free_pixmap(ps->c.c, pixmap);
+		return false;
+	}
+	return ps->backend_data->ops.copy_area(
+		 ps->backend_data, (ivec2){}, ps->capture_image,
+	    ps->backend_data->ops.back_buffer(ps->backend_data), region);
+}
+
 #ifdef CONFIG_DBUS
 struct cdbus_data *session_get_cdbus(struct session *ps) {
 	return ps->dbus_data;
@@ -1502,7 +1822,7 @@ static bool redirect_start(session_t *ps) {
 
 	// Map overlay window. Done firstly according to this:
 	// https://bugzilla.gnome.org/show_bug.cgi?id=597014
-	if (ps->overlay != XCB_NONE) {
+	if (ps->overlay != XCB_NONE && ps->capture_window == XCB_NONE) {
 		xcb_map_window(ps->c.c, ps->overlay);
 	}
 
@@ -1590,6 +1910,7 @@ static void unredirect(session_t *ps) {
 	                                    session_redirection_mode(ps));
 	// Unmap overlay window
 	if (ps->overlay != XCB_NONE &&
+	    ps->capture_window == XCB_NONE &&
 	    session_redirection_mode(ps) == XCB_COMPOSITE_REDIRECT_MANUAL) {
 		xcb_unmap_window(ps->c.c, ps->overlay);
 	}
@@ -1836,6 +2157,9 @@ static void tmout_unredir_callback(EV_P attr_unused, ev_timer *w, int revents at
 }
 
 static void handle_pending_updates(struct session *ps, double delta_t) {
+	if (ps->cursor_enabled && ps->cursor_image_dirty) {
+		cursor_update_image(ps);
+	}
 	// Process new windows, and maybe allocate struct managed_win for them
 	handle_new_windows(ps);
 
@@ -2091,10 +2415,15 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 		    ps->o.force_win_blend, ps->o.blur_background_frame,
 		    ps->o.inactive_dim_fixed, ps->o.max_brightness,
 		    ps->o.crop_shadow_to_monitor ? &ps->monitors : NULL,
-		    ps->root_pixmap_shader, ps->shaders, &after_damage_us);
+		    ps->root_pixmap_shader, ps->shaders,
+		    ps->cursor_enabled ? ps->cursor_image : NULL,
+		    ps->cursor_position, ps->cursor_size, &after_damage_us);
 		if (!succeeded) {
 			log_fatal("Render failure");
 			abort();
+		}
+		if (!update_capture_image(ps, &ps->screen_reg)) {
+			log_warn("Failed to update desktop capture window");
 		}
 		did_render = true;
 		if (ps->next_render > 0) {
@@ -2257,9 +2586,11 @@ load_shader_source(session_t *ps, const struct shader_specification *spec) {
 
 static struct window_options win_options_from_config(const struct options *opts) {
 	struct window_options ret = {
+	    .blur_strength = opts->blur_strength,
 	    .blur_background = opts->blur_method != BLUR_METHOD_NONE,
 	    .liquid_glass_no_dual_kawase = false,
 	    .full_shadow = false,
+	    .geometry_blend = true,
 	    .shadow = opts->shadow_enable,
 	    .shadow_color =
 	        (struct color){
@@ -2369,6 +2700,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	    .root_width = 0,
 	    // .root_damage = XCB_NONE,
 	    .overlay = XCB_NONE,
+	    .capture_window = XCB_NONE,
 	    .reg_win = XCB_NONE,
 	    .redirected = false,
 	    .fade_time = 0L,
@@ -2606,6 +2938,7 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ev_init(&ps->unredir_timer, tmout_unredir_callback);
 	ev_init(&ps->draw_timer, draw_callback);
 	ev_init(&ps->glass_pointer_timer, glass_pointer_timer_callback);
+	ev_init(&ps->cursor_timer, cursor_timer_callback);
 
 	// Set up SIGUSR1 signal handler to reset program
 	ev_signal_init(&ps->usr1_signal, reset_enable, SIGUSR1);
@@ -2657,11 +2990,21 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	e = xcb_request_check(
 	    ps->c.c, xcb_change_window_attributes_checked(
 		                 ps->c.c, ps->c.screen_info->root, XCB_CW_EVENT_MASK,
-		                 (const uint32_t[]){XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
-		                                    XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
-			                                    XCB_EVENT_MASK_PROPERTY_CHANGE}));
+			                 (const uint32_t[]){XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+			                                    XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+			                                    XCB_EVENT_MASK_PROPERTY_CHANGE |
+			                                    XCB_EVENT_MASK_POINTER_MOTION}));
 	if (e) {
 		log_error_x_error(&ps->c, e, "Failed to setup root window event mask");
+		free(e);
+		goto err;
+	}
+	e = xcb_request_check(
+	    ps->c.c, xcb_xfixes_select_cursor_input_checked(
+	                 ps->c.c, ps->c.screen_info->root,
+	                 XCB_XFIXES_CURSOR_NOTIFY_MASK_DISPLAY_CURSOR));
+	if (e) {
+		log_error_x_error(&ps->c, e, "Failed to subscribe to cursor notifications");
 		free(e);
 		goto err;
 	}
@@ -2677,6 +3020,12 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->root_height = r->height;
 	free(r);
 	rebuild_screen_reg(ps);
+	if (ps->capture_window != XCB_NONE) {
+		xcb_configure_window(ps->c.c, ps->capture_window,
+		                      XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+						(const uint32_t[]){(uint32_t)ps->root_width,
+						                   (uint32_t)ps->root_height});
+	}
 
 	if (session_redirection_mode(ps) == XCB_COMPOSITE_REDIRECT_MANUAL && compositor_running) {
 		// Don't take the overlay when there is another compositor
@@ -2685,6 +3034,10 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 		// If we are printing diagnostic, we will continue a bit further
 		// to get more diagnostic information, otherwise we will exit.
 		log_fatal("Another composite manager is already running");
+		goto err;
+	}
+
+	if (ps->o.desktop_capture && !init_capture_window(ps)) {
 		goto err;
 	}
 
@@ -2740,6 +3093,9 @@ static session_t *session_init(int argc, char **argv, Display *dpy,
 	ps->zoom.prev_focal = ps->zoom.focal;
 	ps->glass_pointer = (ivec2){-1, -1};
 	ps->prev_glass_pointer = ps->glass_pointer;
+	ps->cursor_enabled = false;
+	ps->cursor_pixmap = XCB_NONE;
+	ps->cursor_image = NULL;
 	ps->zoom_socket_fd = -1;
 	zoom_socket_init(ps);
 
@@ -2843,6 +3199,10 @@ static void session_destroy(session_t *ps) {
 		xcb_destroy_window(ps->c.c, ps->debug_window);
 		ps->debug_window = XCB_NONE;
 	}
+	if (ps->capture_window != XCB_NONE) {
+		xcb_destroy_window(ps->c.c, ps->capture_window);
+		ps->capture_window = XCB_NONE;
+	}
 
 	if (ps->x_region != XCB_NONE) {
 		xcb_xfixes_destroy_region(ps->c.c, ps->x_region);
@@ -2861,6 +3221,7 @@ static void session_destroy(session_t *ps) {
 	ev_timer_stop(ps->loop, &ps->unredir_timer);
 	ev_timer_stop(ps->loop, &ps->draw_timer);
 	ev_timer_stop(ps->loop, &ps->glass_pointer_timer);
+	ev_timer_stop(ps->loop, &ps->cursor_timer);
 	ev_prepare_stop(ps->loop, &ps->event_check);
 	ev_signal_stop(ps->loop, &ps->usr1_signal);
 	ev_signal_stop(ps->loop, &ps->int_signal);
@@ -2923,6 +3284,7 @@ int PICOM_MAIN(int argc, char **argv) {
 	// owns the zoom socket), forward the command to it and exit. This runs
 	// before any config parsing, so no --config is needed for this.
 	zoom_client_mode_argv(argc, argv);
+	cursor_client_mode_argv(argc, argv);
 
 	parse_debug_options(&global_debug_options);
 

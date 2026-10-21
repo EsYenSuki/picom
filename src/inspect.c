@@ -157,6 +157,10 @@ void inspect_dump_window(const struct c2_state *state, const struct options *opt
 void inspect_dump_window_maybe_options(struct window_maybe_options wopts) {
 	bool nothing = true;
 	printf("      Applying:\n");
+	if (wopts.blur_strength >= 0) {
+		printf("        blur_strength = %d\n", wopts.blur_strength);
+		nothing = false;
+	}
 	if (wopts.shadow != TRI_UNKNOWN) {
 		printf("        shadow = %s\n", wopts.shadow == TRI_TRUE ? "true" : "false");
 		nothing = false;
@@ -188,6 +192,11 @@ void inspect_dump_window_maybe_options(struct window_maybe_options wopts) {
 	if (wopts.transparent_clipping != TRI_UNKNOWN) {
 		printf("        transparent_clipping = %s\n",
 		       wopts.transparent_clipping == TRI_TRUE ? "true" : "false");
+		nothing = false;
+	}
+	if (wopts.geometry_blend != TRI_UNKNOWN) {
+		printf("        geometry_blend = %s\n",
+		       wopts.geometry_blend == TRI_TRUE ? "true" : "false");
 		nothing = false;
 	}
 	if (wopts.full_shadow != TRI_UNKNOWN) {
