@@ -231,6 +231,9 @@ struct shader_specification;
 struct window_maybe_options {
 	/// Strength of the dual-kawase blur, -1 means not set.
 	int blur_strength;
+	/// Per-window liquid-glass values, -1 means not set.
+	int liquid_glass_strength;
+	int liquid_glass_distance;
 	/// Shadow color
 	struct color shadow_color;
 
@@ -282,6 +285,8 @@ struct window_maybe_options {
 /// Like `window_maybe_options`, but all fields are guaranteed to be set.
 struct window_options {
 	int blur_strength;
+	int liquid_glass_strength;
+	int liquid_glass_distance;
 	struct color shadow_color;
 	double opacity;
 	double blur_opacity;

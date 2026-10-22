@@ -322,6 +322,8 @@ static const struct script_output_info win_script_outputs[] = {
 
 static const struct window_maybe_options WIN_MAYBE_OPTIONS_DEFAULT = {
 	.blur_strength = -1,
+	.liquid_glass_strength = -1,
+	.liquid_glass_distance = -1,
     .blur_background = TRI_UNKNOWN,
     .liquid_glass_no_dual_kawase = TRI_UNKNOWN,
     .clip_shadow_above = TRI_UNKNOWN,
@@ -357,6 +359,12 @@ static inline struct window_maybe_options __attribute__((always_inline, const))
 win_maybe_options_fold(struct window_maybe_options upper, struct window_maybe_options lower) {
 	struct window_maybe_options ret = {
 	    .blur_strength = upper.blur_strength >= 0 ? upper.blur_strength : lower.blur_strength,
+	    .liquid_glass_strength = upper.liquid_glass_strength >= 0
+	                                 ? upper.liquid_glass_strength
+	                                 : lower.liquid_glass_strength,
+	    .liquid_glass_distance = upper.liquid_glass_distance >= 0
+	                                 ? upper.liquid_glass_distance
+	                                 : lower.liquid_glass_distance,
 	    .unredir = upper.unredir == WINDOW_UNREDIR_INVALID ? lower.unredir : upper.unredir,
 	    .blur_background = tri_or(upper.blur_background, lower.blur_background),
 	    .liquid_glass_no_dual_kawase =
@@ -389,6 +397,12 @@ win_maybe_options_or(struct window_maybe_options maybe, struct window_options de
 	assert(def.unredir != WINDOW_UNREDIR_INVALID);
 	struct window_options ret = {
 	    .blur_strength = maybe.blur_strength >= 0 ? maybe.blur_strength : def.blur_strength,
+	    .liquid_glass_strength = maybe.liquid_glass_strength >= 0
+	                                 ? maybe.liquid_glass_strength
+	                                 : def.liquid_glass_strength,
+	    .liquid_glass_distance = maybe.liquid_glass_distance >= 0
+	                                 ? maybe.liquid_glass_distance
+	                                 : def.liquid_glass_distance,
 	    .unredir = maybe.unredir == WINDOW_UNREDIR_INVALID ? def.unredir : maybe.unredir,
 	    .blur_background = tri_or_bool(maybe.blur_background, def.blur_background),
 	    .liquid_glass_no_dual_kawase =

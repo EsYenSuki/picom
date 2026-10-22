@@ -161,6 +161,14 @@ void inspect_dump_window_maybe_options(struct window_maybe_options wopts) {
 		printf("        blur_strength = %d\n", wopts.blur_strength);
 		nothing = false;
 	}
+	if (wopts.liquid_glass_strength >= 0) {
+		printf("        liquid_glass_strength = %d\n", wopts.liquid_glass_strength);
+		nothing = false;
+	}
+	if (wopts.liquid_glass_distance >= 0) {
+		printf("        liquid_glass_distance = %d\n", wopts.liquid_glass_distance);
+		nothing = false;
+	}
 	if (wopts.shadow != TRI_UNKNOWN) {
 		printf("        shadow = %s\n", wopts.shadow == TRI_TRUE ? "true" : "false");
 		nothing = false;

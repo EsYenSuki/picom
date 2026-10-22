@@ -2587,6 +2587,8 @@ load_shader_source(session_t *ps, const struct shader_specification *spec) {
 static struct window_options win_options_from_config(const struct options *opts) {
 	struct window_options ret = {
 	    .blur_strength = opts->blur_strength,
+	    .liquid_glass_strength = -1,
+	    .liquid_glass_distance = -1,
 	    .blur_background = opts->blur_method != BLUR_METHOD_NONE,
 	    .liquid_glass_no_dual_kawase = false,
 	    .full_shadow = false,

@@ -965,7 +965,7 @@ Available options of the _blur_ section are: ::
     Integers. The strength, in pixels at 1920x1080, of edge stretching applied by the _liquid_glass_ blur method when a window is focused / unfocused. Values scale with the root window size and the window size using the smaller width or height ratio. Transitions between the two values are animated (default: 100 / 50).
 
   *liquid-glass-distance-focus*, *liquid-glass-distance-unfocus*:::
-    Integers. The distance, in pixels at 1920x1080, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Values scale with the root window size and the window size using the smaller width or height ratio. The distance is clamped independently to each half of the window, so shallow windows still show top/bottom stretching. Transitions between the two values are animated (default: 100 / 50).
+    Integers. The distance, in pixels at 1920x1080, from the window edge over which _liquid_glass_ stretching fades toward the center when a window is focused / unfocused. Values scale with the root window size, but not the individual window size, so a large distance can cover the entire contents of a small window. The distance is clamped independently to each half of the window, so shallow windows still show top/bottom stretching. Transitions between the two values are animated (default: 100 / 50).
 
   *liquid-glass-min-scale*:::
     A floating point number from 0 to 1. Sets the minimum scale applied to liquid-glass strength and distance based on the window size. The window-size scale is mapped from 0--100% to this value--100%; for example, 0.5 maps small windows to 50% and reference-size windows to 100% (default: 0.0).
@@ -991,6 +991,12 @@ Available options of the _blur_ section are: ::
 Window rules may also set *liquid-glass-no-dual-kawase* to a boolean. When true,
 the matching window skips the preliminary _dual_kawase_ blur while retaining
 liquid-glass refraction and chromatic aberration (default: false).
+
+Window rules may also set *liquid-glass-strength* and
+*liquid-glass-distance* to override the liquid-glass edge stretching and
+falloff distance for matching windows. The values use the same units and
+scaling as the corresponding options in the _blur_ section. A rule value is
+used for both focused and unfocused states.
 
 
   *kernel*:::

@@ -1689,6 +1689,7 @@ double win_animatable_get(const struct win *w, enum win_script_output output) {
 /// Returns true if a transition is still running.
 bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) {
 	const auto o = &ps->o;
+	const auto wopts = win_options(w);
 	// Scale pixel-based liquid-glass values from the 1920x1080 reference
 	// resolution and the individual window size. The minimum scale maps the
 	// window-size range from [0, 1] to [min_scale, 1].
@@ -1699,15 +1700,23 @@ bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) 
 	const double min_scale = clamp(o->liquid_glass_min_scale, 0.0, 1.0);
 	const double glass_scale = screen_scale *
 	                           (min_scale + (1.0 - min_scale) * clamp(window_scale, 0.0, 1.0));
-	double target_strength = w->is_focused ? o->liquid_glass_strength_focus
-	                                       : o->liquid_glass_strength_unfocus;
+	double target_strength = wopts.liquid_glass_strength >= 0
+	                             ? wopts.liquid_glass_strength
+	                             : (w->is_focused ? o->liquid_glass_strength_focus
+	                                               : o->liquid_glass_strength_unfocus);
 	double target_aberration = w->is_focused ? o->liquid_glass_aberration_focus
 	                                         : o->liquid_glass_aberration_unfocus;
-	double target_distance = w->is_focused ? o->liquid_glass_distance_focus
-	                                       : o->liquid_glass_distance_unfocus;
+	double target_distance = wopts.liquid_glass_distance >= 0
+	                             ? wopts.liquid_glass_distance
+	                             : (w->is_focused ? o->liquid_glass_distance_focus
+	                                               : o->liquid_glass_distance_unfocus);
 	target_strength *= glass_scale;
 	target_aberration *= glass_scale;
-	target_distance *= glass_scale;
+	// Distance is an edge falloff range. Do not scale it by the individual
+	// window size: on small windows that would shrink a large configured
+	// distance and leave an undistorted band through the middle of the window.
+	// The shader clamps the range to each half-window when necessary.
+	target_distance *= screen_scale;
 	auto target_zoom =
 	    w->is_focused ? o->liquid_glass_zoom_focus : o->liquid_glass_zoom_unfocus;
 

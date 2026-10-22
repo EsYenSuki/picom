@@ -1002,56 +1002,44 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 		// Build shader
 const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                ? "vec2 mask_size = textureSize(mask_tex, 0);\n"
-                                 "vec2 maskcoord = (texcoord - mask_offset) / mask_scale;\n"
-                                 "vec2 centered = maskcoord - mask_size * 0.5;\n"
-                                 "vec2 half_size = mask_size * 0.5;\n"
-                                 "float edge_width = float(liquid_glass_distance);\n"
+                                  "vec2 maskcoord = (texcoord - mask_offset) / mask_scale;\n"
+                                  "vec2 centered = maskcoord - mask_size * 0.5;\n"
+                                  "vec2 half_size = mask_size * 0.5;\n"
+                                  "float edge_width = float(liquid_glass_distance);\n"
 
-                                 // Move the SIDE cutting point independently.
-                                 // < 1.0 = closer to the edge
-                                 // > 1.0 = farther toward the center
-                                  // A window can be much smaller than the configured edge
-                                  // distance on one axis. Clamp each axis independently so
-                                  // shallow windows still get a visible top/bottom stretch.
-                                  "vec2 side_cut = min(vec2(edge_width), half_size);\n"
-
-                                 "vec2 inner_bounds = max(half_size - side_cut, vec2(0.0));\n"
-                                 "vec2 overstep = max(abs(centered) - inner_bounds, vec2(0.0));\n"
-
-                                 // Corner cutting point stays independent.
-                                  "vec2 corner_cut = min(vec2(edge_width * 0.5), half_size);\n"
-                                  "vec2 corner_inner_bounds = max(half_size - corner_cut, vec2(0.0));\n"
-                                 "vec2 corner_overstep = max(abs(centered) - corner_inner_bounds, vec2(0.0));\n"
-
-                                 "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm / (2.0 * scale);\n"
-                                 "vec2 zoom_origin = window_center;\n"
+                                  "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm / (2.0 * scale);\n"
+                                  "vec2 zoom_origin = window_center;\n"
                                  "if (liquid_glass_zoom_anchor_mouse == 1) {\n"
                                  "    zoom_origin = liquid_glass_anchor * pixel_norm / (2.0 * scale);\n"
-                                 "}\n"
-                                 "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
+                                  "}\n"
+                                  "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
 
-                                  "float horizontal_progress = smoothstep(0.0, side_cut.x, overstep.x);\n"
-                                  "float vertical_progress = smoothstep(0.0, side_cut.y, overstep.y);\n"
+                                  // Build a normalized radial field over the complete
+                                  // window. Unlike the old edge-band calculation, this
+                                  // has no rectangular dead zone in the middle: every
+                                  // pixel except the exact center receives a smooth
+                                  // fisheye displacement when distance covers the window.
+                                  "vec2 normalized_centered = centered / max(half_size, vec2(1.0));\n"
+                                  // Use picom's rounded-corner distance to shape the
+                                  // fisheye falloff without a separate corner term.
+                                  "float warp_corner_radius = mask_corner_radius;\n"
+                                  "vec2 rounded_half_size = max(half_size - vec2(warp_corner_radius), vec2(0.0));\n"
+                                  "vec2 rounded_q = abs(centered) - rounded_half_size;\n"
+                                  "float rounded_sdf = length(max(rounded_q, vec2(0.0))) + min(max(rounded_q.x, rounded_q.y), 0.0) - warp_corner_radius;\n"
+                                  "float distance_to_edge = max(-rounded_sdf, 0.0);\n"
+                                   "float edge_progress = edge_width > 0.0 ? 1.0 - smoothstep(0.0, edge_width, distance_to_edge) : 0.0;\n"
+                                   "edge_progress = liquid_glass_bezier(clamp(edge_progress, 0.0, 1.0));\n"
+                                  // Apply one radial fisheye displacement. The rounded
+                                  // SDF still controls the edge falloff, but there is
+                                  // no separate corner displacement term.
+                                  "vec2 radial_direction = normalized_centered / max(length(normalized_centered), 1e-4);\n"
+                                    "vec2 stretch = -radial_direction * edge_progress;\n"
 
-                                 "horizontal_progress = liquid_glass_bezier(clamp(horizontal_progress, 0.0, 1.0));\n"
-                                 "vertical_progress = liquid_glass_bezier(clamp(vertical_progress, 0.0, 1.0));\n"
-
-                                  "float corner_progress = smoothstep(0.0, min(corner_cut.x, corner_cut.y), min(corner_overstep.x, corner_overstep.y));\n"
-                                 "corner_progress = liquid_glass_bezier(clamp(corner_progress, 0.0, 1.0));\n"
-
-                                 "vec2 horizontal_direction = vec2(-sign(centered.x), 0.0);\n"
-                                 "vec2 vertical_direction = vec2(0.0, -sign(centered.y));\n"
-                                 "vec2 diagonal_direction = -normalize(sign(centered));\n"
-
-                                 "vec2 stretch = horizontal_direction * horizontal_progress +\n"
-                                 "    vertical_direction * vertical_progress +\n"
-                                 "    diagonal_direction * corner_progress;\n"
-
-                                  "uv += stretch * float(liquid_glass_strength) * 1.8\n"
+                                   "uv += stretch * float(liquid_glass_strength) * 3.6\n"
                                   "    * pixel_norm / (2.0 * scale);\n"
                                   "vec2 aberration_offset = stretch * liquid_glass_aberration\n"
                                   "    * pixel_norm / (2.0 * scale);\n"
-                                : "vec2 aberration_offset = vec2(0.0);\n";
+                                  : "vec2 aberration_offset = vec2(0.0);\n";
 		size_t shader_len = strlen(FRAG_SHADER_UP) + strlen(warp) + 24 + 1;
 		char *shader_str = ccalloc(shader_len, char);
 		auto real_shader_len =
@@ -1130,8 +1118,12 @@ void *gl_create_blur_context(backend_t *base, enum blur_method method,
 		for (int i = 0; i < 4; i++) {
 			ctx->liquid_glass_curve[i] = (float)glass_args->liquid_glass_curve[i];
 		}
-		ctx->resize_width = max2(ctx->resize_width, ctx->liquid_glass_strength);
-		ctx->resize_height = max2(ctx->resize_height, ctx->liquid_glass_strength);
+        // Keep enough source texture around the window for the stronger warp.
+        // Without this, the shader samples outside the resized blur region and
+        // the fisheye appears to stop abruptly, especially near diagonals.
+        const int warp_resize = (int)ceil(ctx->liquid_glass_strength * 3.6);
+        ctx->resize_width = max2(ctx->resize_width, warp_resize);
+        ctx->resize_height = max2(ctx->resize_height, warp_resize);
 	}
 	// Expand the blur region to account for noise samples
 	ctx->resize_width = max2(ctx->resize_width, ctx->noise_radius);

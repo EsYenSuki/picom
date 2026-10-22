@@ -778,6 +778,26 @@ parse_rule(struct list_node *rules, config_setting_t *setting, const char *inclu
 		}
 		wopts->blur_strength = ival;
 	}
+	if (config_setting_lookup_int(setting, "liquid-glass-strength", &ival)) {
+		if (ival < 0) {
+			log_error("Invalid liquid-glass-strength at line %d. It must be at least 0.",
+			          config_setting_source_line(setting));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->liquid_glass_strength = ival;
+	}
+	if (config_setting_lookup_int(setting, "liquid-glass-distance", &ival)) {
+		if (ival < 1) {
+			log_error("Invalid liquid-glass-distance at line %d. It must be at least 1.",
+			          config_setting_source_line(setting));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->liquid_glass_distance = ival;
+	}
 	if (config_setting_lookup_string(setting, "shadow-color", &sval)) {
 		wopts->is_shadow_color_set = true;
 		wopts->shadow_color = hex_to_rgb(sval);
