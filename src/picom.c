@@ -2475,7 +2475,6 @@ static void draw_callback_impl(EV_P_ session_t *ps, int revents attr_unused) {
 	     ps->glass_pointer.y != ps->prev_glass_pointer.y);
 	ps->prev_glass_pointer = ps->glass_pointer;
 	glass_pointer_timer_update(ps);
-
 	if (animation || zoom_needs_redraw || glass_needs_redraw) {
 		queue_redraw(ps);
 	} else {
@@ -2589,6 +2588,8 @@ static struct window_options win_options_from_config(const struct options *opts)
 	    .blur_strength = opts->blur_strength,
 	    .liquid_glass_strength = -1,
 	    .liquid_glass_distance = -1,
+	    .liquid_glass_zoom_focus = NAN,
+	    .liquid_glass_zoom_unfocus = NAN,
 	    .blur_background = opts->blur_method != BLUR_METHOD_NONE,
 	    .liquid_glass_no_dual_kawase = false,
 	    .full_shadow = false,

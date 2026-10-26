@@ -357,6 +357,12 @@ Within each sub-item, these keys are available: ::
   blur-opacity:::
 	Opacity of the background blur. (0.0 - 1.0). If not explicitly set by a rule, this will be 1.0. Ignored by `blur-background` is not enabled.
 
+  blur-gradient-direction:::
+	The axis of the linear blur-opacity gradient: `horizontal` runs from left to right, and `vertical` runs from top to bottom.
+
+  blur-gradient-opacity:::
+	A list of `[position, blur amount]` points for spatially varying dual-Kawase blur, both in percent. Positions run from 0 at the left/top to 100 at the right/bottom, follow *blur-gradient-direction*, and must be in strictly increasing order. The amount scales the blur radius from 0% (no blur) to 100% (the configured blur strength). Values outside the first and last points are clamped to the nearest point. For example, `((0, 100), (50, 0), (100, 100))` gives full blur at both edges and no blur at the center. Up to 32 points may be specified.
+
   dim:::
 	Dim level of the matching window. Larger value means more dimming. (0.0 - 1.0)
 
@@ -368,6 +374,15 @@ Within each sub-item, these keys are available: ::
 
   liquid-glass-no-dual-kawase:::
 	Whether the matching _liquid_glass_ window should skip the preliminary _dual_kawase_ blur. Refraction and chromatic aberration remain enabled.
+
+  liquid-glass-zoom-focus:::
+	Override the liquid-glass sampling zoom for the matching window when it is focused. The value must be at least 0. Values below 1 zoom inward; values above 1 also zoom inward, with larger values producing a stronger zoom.
+
+  liquid-glass-zoom-unfocus:::
+	Override the liquid-glass sampling zoom for the matching window when it is not focused. The value must be between 0 and 1.
+
+  zoom-anchor:::
+	Set a liquid-glass zoom anchor as two integer coordinates relative to the matching window's top-left corner. It can be written as a string such as `"150,19"` or as an array such as `[150, 19]`. The anchor moves with the matching window. This overrides the global mouse-follow setting for the matching window.
 
   invert-color:::
 	Whether to invert the color of the matching window.
@@ -997,6 +1012,30 @@ Window rules may also set *liquid-glass-strength* and
 falloff distance for matching windows. The values use the same units and
 scaling as the corresponding options in the _blur_ section. A rule value is
 used for both focused and unfocused states.
+
+Window rules may also set *liquid-glass-zoom-focus* and
+*liquid-glass-zoom-unfocus* to override the liquid-glass sampling zoom for
+matching windows. The values must be between 0 and 1 and are selected based
+on the window's focus state. If only one is specified, the other state uses
+the global value.
+
+Window rules may also set *zoom-anchor* to a pair of integer coordinates
+relative to the matching window's top-left corner. This fixed anchor takes
+precedence over the global *liquid-glass-zoom-follow-mouse* setting for that
+window.
+
+Window rules may set *blur-gradient-direction* and *blur-gradient-opacity*
+together to vary the dual-kawase blur opacity along a line. In liquid-glass
+mode, the gradient affects only the dual-kawase blur layer, not the glass warp
+or the liquid-glass filtering. It has no effect when
+*liquid-glass-no-dual-kawase* is enabled.
+The two percentage
+values multiply the window's effective blur opacity at the respective ends of
+the selected direction. Values are interpolated linearly across the window
+and clamped at its edges.
+Both settings must be present in the effective window options for the
+gradient to be enabled. This applies to the dual-kawase and liquid-glass
+methods.
 
 
   *kernel*:::

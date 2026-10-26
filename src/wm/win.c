@@ -1717,8 +1717,13 @@ bool win_update_liquid_glass(struct session *ps, struct win *w, double delta_t) 
 	// distance and leave an undistorted band through the middle of the window.
 	// The shader clamps the range to each half-window when necessary.
 	target_distance *= screen_scale;
-	auto target_zoom =
-	    w->is_focused ? o->liquid_glass_zoom_focus : o->liquid_glass_zoom_unfocus;
+	auto target_zoom = w->is_focused
+	                       ? (safe_isnan(wopts.liquid_glass_zoom_focus)
+	                              ? o->liquid_glass_zoom_focus
+	                              : wopts.liquid_glass_zoom_focus)
+	                       : (safe_isnan(wopts.liquid_glass_zoom_unfocus)
+	                              ? o->liquid_glass_zoom_unfocus
+	                              : wopts.liquid_glass_zoom_unfocus);
 
 	if (!w->glass.initialized) {
 		w->glass.strength = target_strength;

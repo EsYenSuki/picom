@@ -135,6 +135,14 @@ struct backend_blur_args {
 	double dual_kawase_scale;
 	/// Per-command dual-kawase strength; -1 means use the context default.
 	int dual_kawase_strength;
+	/// Apply a spatially varying dual-Kawase blur amount.
+	bool blur_gradient_enabled;
+	/// Gradient axis endpoints in source-image/screen coordinates.
+	vec2 blur_gradient_start;
+	vec2 blur_gradient_end;
+	/// Gradient blur amounts [position, amount], both normalized to 0..1.
+	struct blur_gradient_point blur_gradient_points[BLUR_GRADIENT_MAX_POINTS];
+	unsigned int blur_gradient_point_count;
 	/// Skip the preliminary dual-kawase blur for this liquid-glass draw.
 	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass edge stretching for this draw

@@ -228,12 +228,30 @@ enum window_unredir_option {
 
 struct shader_specification;
 
+enum blur_gradient_direction {
+	BLUR_GRADIENT_HORIZONTAL,
+	BLUR_GRADIENT_VERTICAL,
+};
+
 struct window_maybe_options {
 	/// Strength of the dual-kawase blur, -1 means not set.
 	int blur_strength;
+	/// Direction of the per-window blur opacity gradient.
+	enum blur_gradient_direction blur_gradient_direction;
+	/// Ordered [position, blur amount] gradient points, both in percent.
+	struct blur_gradient_point blur_gradient_opacity[BLUR_GRADIENT_MAX_POINTS];
+	unsigned int blur_gradient_opacity_count;
+	bool blur_gradient_direction_set;
+	bool blur_gradient_opacity_set;
 	/// Per-window liquid-glass values, -1 means not set.
 	int liquid_glass_strength;
 	int liquid_glass_distance;
+	/// Per-window liquid-glass zoom values, NaN means not set.
+	double liquid_glass_zoom_focus;
+	double liquid_glass_zoom_unfocus;
+	/// Fixed liquid-glass zoom anchor relative to the window, when set.
+	ivec2 liquid_glass_zoom_anchor;
+	bool liquid_glass_zoom_anchor_set;
 	/// Shadow color
 	struct color shadow_color;
 
@@ -285,8 +303,17 @@ struct window_maybe_options {
 /// Like `window_maybe_options`, but all fields are guaranteed to be set.
 struct window_options {
 	int blur_strength;
+	enum blur_gradient_direction blur_gradient_direction;
+	struct blur_gradient_point blur_gradient_opacity[BLUR_GRADIENT_MAX_POINTS];
+	unsigned int blur_gradient_opacity_count;
+	bool blur_gradient_direction_set;
+	bool blur_gradient_opacity_set;
 	int liquid_glass_strength;
 	int liquid_glass_distance;
+	double liquid_glass_zoom_focus;
+	double liquid_glass_zoom_unfocus;
+	ivec2 liquid_glass_zoom_anchor;
+	bool liquid_glass_zoom_anchor_set;
 	struct color shadow_color;
 	double opacity;
 	double blur_opacity;

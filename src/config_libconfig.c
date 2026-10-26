@@ -659,6 +659,86 @@ static const struct {
 	{"geometry-blend", offsetof(struct window_maybe_options, geometry_blend)},
 };
 
+static bool parse_zoom_anchor(config_setting_t *setting, ivec2 *anchor) {
+	if (config_setting_is_array(setting) || config_setting_is_list(setting)) {
+		if (config_setting_length(setting) != 2 ||
+		    config_setting_type(config_setting_get_elem(setting, 0)) != CONFIG_TYPE_INT ||
+		    config_setting_type(config_setting_get_elem(setting, 1)) != CONFIG_TYPE_INT) {
+			return false;
+		}
+		anchor->x = config_setting_get_int_elem(setting, 0);
+		anchor->y = config_setting_get_int_elem(setting, 1);
+		return true;
+	}
+
+	const char *value = config_setting_get_string(setting);
+	char extra;
+	return value != NULL && sscanf(value, " %d , %d %c", &anchor->x, &anchor->y, &extra) == 2;
+}
+
+static bool config_setting_get_number(config_setting_t *setting, double *value) {
+	if (setting == NULL) {
+		return false;
+	}
+	switch (config_setting_type(setting)) {
+	case CONFIG_TYPE_INT:
+		*value = config_setting_get_int(setting);
+		return true;
+	case CONFIG_TYPE_FLOAT:
+		*value = config_setting_get_float(setting);
+		return true;
+	default: return false;
+	}
+}
+
+static bool parse_blur_gradient_direction(config_setting_t *setting,
+	                                      struct window_maybe_options *wopts) {
+	const char *value = config_setting_get_string(setting);
+	if (value == NULL) {
+		return false;
+	}
+	if (strcmp(value, "horizontal") == 0) {
+		wopts->blur_gradient_direction = BLUR_GRADIENT_HORIZONTAL;
+	} else if (strcmp(value, "vertical") == 0) {
+		wopts->blur_gradient_direction = BLUR_GRADIENT_VERTICAL;
+	} else {
+		return false;
+	}
+	wopts->blur_gradient_direction_set = true;
+	return true;
+}
+
+static bool parse_blur_gradient_opacity(config_setting_t *setting,
+	                                    struct window_maybe_options *wopts) {
+	if (!(config_setting_is_array(setting) || config_setting_is_list(setting))) {
+		return false;
+	}
+	const int count = config_setting_length(setting);
+	if (count < 1 || count > BLUR_GRADIENT_MAX_POINTS) {
+		return false;
+	}
+	for (unsigned int i = 0; i < (unsigned int)count; i++) {
+		auto point = config_setting_get_elem(setting, i);
+		if (!(config_setting_is_array(point) || config_setting_is_list(point)) ||
+		    config_setting_length(point) != 2 ||
+		    !config_setting_get_number(config_setting_get_elem(point, 0),
+		                               &wopts->blur_gradient_opacity[i].position) ||
+		    !config_setting_get_number(config_setting_get_elem(point, 1),
+		                               &wopts->blur_gradient_opacity[i].amount) ||
+		    wopts->blur_gradient_opacity[i].position < 0 ||
+		    wopts->blur_gradient_opacity[i].position > 100 ||
+		    wopts->blur_gradient_opacity[i].amount < 0 ||
+		    wopts->blur_gradient_opacity[i].amount > 100 ||
+		    (i > 0 && wopts->blur_gradient_opacity[i].position <=
+		                 wopts->blur_gradient_opacity[i - 1].position)) {
+			return false;
+		}
+	}
+	wopts->blur_gradient_opacity_count = (unsigned int)count;
+	wopts->blur_gradient_opacity_set = true;
+	return true;
+}
+
 static struct shader_specification *
 parse_shader_specification(config_setting_t *setting, const char *include_dir) {
 	const char *path = config_setting_get_string(setting);
@@ -778,6 +858,26 @@ parse_rule(struct list_node *rules, config_setting_t *setting, const char *inclu
 		}
 		wopts->blur_strength = ival;
 	}
+	auto gradient_direction = config_setting_lookup(setting, "blur-gradient-direction");
+	if (gradient_direction && !parse_blur_gradient_direction(gradient_direction, wopts)) {
+		log_error("Invalid blur-gradient-direction at line %d. It must be one of "
+		          "'horizontal' or 'vertical'.",
+		          config_setting_source_line(gradient_direction));
+		c2_condition_set_data(rule, NULL);
+		free(wopts);
+		return false;
+	}
+	auto gradient_opacity = config_setting_lookup(setting, "blur-gradient-opacity");
+	if (gradient_opacity && !parse_blur_gradient_opacity(gradient_opacity, wopts)) {
+		log_error("Invalid blur-gradient-opacity at line %d. It must be a list of up to %d "
+		          "ordered [position, blur amount] percentage points between 0 and 100, "
+		          "for example [[0, 100], [50, 0], [100, 100]].",
+		          BLUR_GRADIENT_MAX_POINTS,
+		          config_setting_source_line(gradient_opacity));
+		c2_condition_set_data(rule, NULL);
+		free(wopts);
+		return false;
+	}
 	if (config_setting_lookup_int(setting, "liquid-glass-strength", &ival)) {
 		if (ival < 0) {
 			log_error("Invalid liquid-glass-strength at line %d. It must be at least 0.",
@@ -797,6 +897,37 @@ parse_rule(struct list_node *rules, config_setting_t *setting, const char *inclu
 			return false;
 		}
 		wopts->liquid_glass_distance = ival;
+	}
+	if (config_setting_lookup_float(setting, "liquid-glass-zoom-focus", &fval)) {
+		if (fval < 0 || fval > 1) {
+			log_error("Invalid liquid-glass-zoom-focus at line %d. It must be between 0 and 1.",
+			          config_setting_source_line(setting));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->liquid_glass_zoom_focus = fval;
+	}
+	if (config_setting_lookup_float(setting, "liquid-glass-zoom-unfocus", &fval)) {
+		if (fval < 0 || fval > 1) {
+			log_error("Invalid liquid-glass-zoom-unfocus at line %d. It must be between 0 and 1.",
+			          config_setting_source_line(setting));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->liquid_glass_zoom_unfocus = fval;
+	}
+	auto zoom_anchor = config_setting_lookup(setting, "zoom-anchor");
+	if (zoom_anchor) {
+		if (!parse_zoom_anchor(zoom_anchor, &wopts->liquid_glass_zoom_anchor)) {
+			log_error("Invalid zoom-anchor at line %d. It must contain two integer coordinates (x,y).",
+			          config_setting_source_line(zoom_anchor));
+			c2_condition_set_data(rule, NULL);
+			free(wopts);
+			return false;
+		}
+		wopts->liquid_glass_zoom_anchor_set = true;
 	}
 	if (config_setting_lookup_string(setting, "shadow-color", &sval)) {
 		wopts->is_shadow_color_set = true;

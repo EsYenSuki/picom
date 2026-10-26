@@ -322,8 +322,13 @@ static const struct script_output_info win_script_outputs[] = {
 
 static const struct window_maybe_options WIN_MAYBE_OPTIONS_DEFAULT = {
 	.blur_strength = -1,
+	.blur_gradient_direction_set = false,
+	.blur_gradient_opacity_set = false,
 	.liquid_glass_strength = -1,
 	.liquid_glass_distance = -1,
+	.liquid_glass_zoom_focus = NAN,
+	.liquid_glass_zoom_unfocus = NAN,
+	.liquid_glass_zoom_anchor_set = false,
     .blur_background = TRI_UNKNOWN,
     .liquid_glass_no_dual_kawase = TRI_UNKNOWN,
     .clip_shadow_above = TRI_UNKNOWN,
@@ -359,12 +364,30 @@ static inline struct window_maybe_options __attribute__((always_inline, const))
 win_maybe_options_fold(struct window_maybe_options upper, struct window_maybe_options lower) {
 	struct window_maybe_options ret = {
 	    .blur_strength = upper.blur_strength >= 0 ? upper.blur_strength : lower.blur_strength,
+	    .blur_gradient_direction_set = upper.blur_gradient_direction_set || lower.blur_gradient_direction_set,
+	    .blur_gradient_opacity_set = upper.blur_gradient_opacity_set || lower.blur_gradient_opacity_set,
+	    .blur_gradient_direction = upper.blur_gradient_direction_set
+	                                  ? upper.blur_gradient_direction
+	                                  : lower.blur_gradient_direction,
+	    .blur_gradient_opacity = {0},
+	    .blur_gradient_opacity_count = upper.blur_gradient_opacity_set
+	                                     ? upper.blur_gradient_opacity_count
+	                                     : lower.blur_gradient_opacity_count,
 	    .liquid_glass_strength = upper.liquid_glass_strength >= 0
 	                                 ? upper.liquid_glass_strength
 	                                 : lower.liquid_glass_strength,
 	    .liquid_glass_distance = upper.liquid_glass_distance >= 0
 	                                 ? upper.liquid_glass_distance
 	                                 : lower.liquid_glass_distance,
+	    .liquid_glass_zoom_focus = number_or_d(upper.liquid_glass_zoom_focus,
+	                                           lower.liquid_glass_zoom_focus),
+	    .liquid_glass_zoom_unfocus = number_or_d(upper.liquid_glass_zoom_unfocus,
+	                                             lower.liquid_glass_zoom_unfocus),
+	    .liquid_glass_zoom_anchor = upper.liquid_glass_zoom_anchor_set
+	                                   ? upper.liquid_glass_zoom_anchor
+	                                   : lower.liquid_glass_zoom_anchor,
+	    .liquid_glass_zoom_anchor_set = upper.liquid_glass_zoom_anchor_set ||
+	                                    lower.liquid_glass_zoom_anchor_set,
 	    .unredir = upper.unredir == WINDOW_UNREDIR_INVALID ? lower.unredir : upper.unredir,
 	    .blur_background = tri_or(upper.blur_background, lower.blur_background),
 	    .liquid_glass_no_dual_kawase =
@@ -386,6 +409,9 @@ win_maybe_options_fold(struct window_maybe_options upper, struct window_maybe_op
 	    .is_shadow_color_set = upper.is_shadow_color_set || lower.is_shadow_color_set,
 	    .shadow_color = upper.is_shadow_color_set ? upper.shadow_color : lower.shadow_color,
 	};
+	memcpy(ret.blur_gradient_opacity,
+	       upper.blur_gradient_opacity_set ? upper.blur_gradient_opacity : lower.blur_gradient_opacity,
+	       sizeof(ret.blur_gradient_opacity));
 	win_script_fold(upper.animations, lower.animations, ret.animations);
 	return ret;
 }
@@ -397,12 +423,30 @@ win_maybe_options_or(struct window_maybe_options maybe, struct window_options de
 	assert(def.unredir != WINDOW_UNREDIR_INVALID);
 	struct window_options ret = {
 	    .blur_strength = maybe.blur_strength >= 0 ? maybe.blur_strength : def.blur_strength,
+	    .blur_gradient_direction_set = maybe.blur_gradient_direction_set || def.blur_gradient_direction_set,
+	    .blur_gradient_opacity_set = maybe.blur_gradient_opacity_set || def.blur_gradient_opacity_set,
+	    .blur_gradient_direction = maybe.blur_gradient_direction_set
+	                                  ? maybe.blur_gradient_direction
+	                                  : def.blur_gradient_direction,
+	    .blur_gradient_opacity = {0},
+	    .blur_gradient_opacity_count = maybe.blur_gradient_opacity_set
+	                                     ? maybe.blur_gradient_opacity_count
+	                                     : def.blur_gradient_opacity_count,
 	    .liquid_glass_strength = maybe.liquid_glass_strength >= 0
 	                                 ? maybe.liquid_glass_strength
 	                                 : def.liquid_glass_strength,
 	    .liquid_glass_distance = maybe.liquid_glass_distance >= 0
 	                                 ? maybe.liquid_glass_distance
 	                                 : def.liquid_glass_distance,
+	    .liquid_glass_zoom_focus = number_or_d(maybe.liquid_glass_zoom_focus,
+	                                           def.liquid_glass_zoom_focus),
+	    .liquid_glass_zoom_unfocus = number_or_d(maybe.liquid_glass_zoom_unfocus,
+	                                             def.liquid_glass_zoom_unfocus),
+	    .liquid_glass_zoom_anchor = maybe.liquid_glass_zoom_anchor_set
+	                                   ? maybe.liquid_glass_zoom_anchor
+	                                   : def.liquid_glass_zoom_anchor,
+	    .liquid_glass_zoom_anchor_set = maybe.liquid_glass_zoom_anchor_set ||
+	                                    def.liquid_glass_zoom_anchor_set,
 	    .unredir = maybe.unredir == WINDOW_UNREDIR_INVALID ? def.unredir : maybe.unredir,
 	    .blur_background = tri_or_bool(maybe.blur_background, def.blur_background),
 	    .liquid_glass_no_dual_kawase =
@@ -424,6 +468,9 @@ win_maybe_options_or(struct window_maybe_options maybe, struct window_options de
 	    .shader = maybe.shader ? maybe.shader : def.shader,
 	    .shadow_color = maybe.is_shadow_color_set ? maybe.shadow_color : def.shadow_color,
 	};
+	memcpy(ret.blur_gradient_opacity,
+	       maybe.blur_gradient_opacity_set ? maybe.blur_gradient_opacity : def.blur_gradient_opacity,
+	       sizeof(ret.blur_gradient_opacity));
 	win_script_fold(maybe.animations, def.animations, ret.animations);
 	return ret;
 }

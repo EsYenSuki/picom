@@ -169,6 +169,19 @@ void inspect_dump_window_maybe_options(struct window_maybe_options wopts) {
 		printf("        liquid_glass_distance = %d\n", wopts.liquid_glass_distance);
 		nothing = false;
 	}
+	if (!safe_isnan(wopts.liquid_glass_zoom_focus)) {
+		printf("        liquid_glass_zoom_focus = %.3f\n", wopts.liquid_glass_zoom_focus);
+		nothing = false;
+	}
+	if (!safe_isnan(wopts.liquid_glass_zoom_unfocus)) {
+		printf("        liquid_glass_zoom_unfocus = %.3f\n", wopts.liquid_glass_zoom_unfocus);
+		nothing = false;
+	}
+	if (wopts.liquid_glass_zoom_anchor_set) {
+		printf("        zoom_anchor = %d,%d\n", wopts.liquid_glass_zoom_anchor.x,
+		       wopts.liquid_glass_zoom_anchor.y);
+		nothing = false;
+	}
 	if (wopts.shadow != TRI_UNKNOWN) {
 		printf("        shadow = %s\n", wopts.shadow == TRI_TRUE ? "true" : "false");
 		nothing = false;

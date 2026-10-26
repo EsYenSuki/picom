@@ -53,6 +53,26 @@ struct gl_blur_context {
 	enum blur_method method;
 };
 
+static void gl_set_blur_gradient_uniforms(const struct backend_blur_args *args,
+                                          ivec2 origin, bool enabled) {
+	glUniform2f(UNIFORM_BLUR_GRADIENT_START_LOC,
+	            (GLfloat)(args->blur_gradient_start.x - origin.x),
+	            (GLfloat)(args->blur_gradient_start.y - origin.y));
+	glUniform2f(UNIFORM_BLUR_GRADIENT_END_LOC,
+	            (GLfloat)(args->blur_gradient_end.x - origin.x),
+	            (GLfloat)(args->blur_gradient_end.y - origin.y));
+	GLfloat points[BLUR_GRADIENT_MAX_POINTS * 2];
+	for (unsigned int i = 0; i < args->blur_gradient_point_count; i++) {
+		points[i * 2] = (GLfloat)args->blur_gradient_points[i].position;
+		points[i * 2 + 1] = (GLfloat)args->blur_gradient_points[i].amount;
+	}
+	glUniform2fv(UNIFORM_BLUR_GRADIENT_POINTS_LOC,
+	             (GLsizei)args->blur_gradient_point_count, points);
+	glUniform1i(UNIFORM_BLUR_GRADIENT_POINT_COUNT_LOC,
+	            (GLint)args->blur_gradient_point_count);
+	glUniform1i(UNIFORM_BLUR_GRADIENT_ENABLED_LOC, enabled ? 1 : 0);
+}
+
 // TODO(yshui) small optimization for kernel blur, if source and target are different,
 // single pass blur can paint directly from source to target. Currently a temporary
 // texture is always used.
@@ -167,11 +187,12 @@ gl_kernel_blur(double opacity, struct gl_blur_context *bctx,
 /// @param vao two vertex array objects.
 ///            [0]: for sampling from blurred result into the target fbo.
 ///            [1]: for sampling from the source texture into blurred textures.
-bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int kawase_strength,
+bool gl_dual_kawase_blur(ivec2 origin, double opacity, float dual_kawase_scale, int kawase_strength,
                          int glass_strength,
                           int glass_distance, int glass_aberration, float glass_zoom,
                           float glass_saturation, vec2 glass_anchor,
                           bool glass_zoom_follow_mouse, bool no_dual_kawase,
+                          const struct backend_blur_args *args,
                           struct gl_blur_context *bctx,
                          const struct backend_mask_image *mask, vec2 mask_scale,
                          const GLuint vao[2], const int vao_nelems[2],
@@ -225,6 +246,7 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int kawase_str
 		}
 		glUniform1i(UNIFORM_MASK_TEX_LOC, 1);
 		glUniform1f(UNIFORM_OPACITY_LOC, (float)opacity);
+		gl_set_blur_gradient_uniforms(args, origin, false);
 		glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
 		glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
 		glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
@@ -313,15 +335,84 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int kawase_str
 	glUniform2f(UNIFORM_MASK_SCALE_LOC, 1.0F, 1.0F);
 	glUniform1f(UNIFORM_OPACITY_LOC, 1.0F);
 	glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, 0);
-		glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, 0.0F);
-		glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, 0);
-		glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, 0.0F);
-		// The liquid-glass shader is reused for intermediate upsample passes.
-		// Keep its zoom neutral until the final compositing pass below.
-		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, 1.0F);
-		glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, 1.0F);
-		glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC, 0);
-		glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, 0.0F, 0.0F);
+	glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, 0.0F);
+	glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, 0);
+	glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, 0.0F);
+	// The liquid-glass shader is reused for intermediate upsample passes.
+	// Keep its zoom neutral until the final compositing pass below.
+	glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, 1.0F);
+	glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, 1.0F);
+	glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC, 0);
+	glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, 0.0F, 0.0F);
+	glUniform1i(UNIFORM_BLUR_GRADIENT_ENABLED_LOC, 0);
+	glUniform1i(UNIFORM_BLUR_GRADIENT_POINT_COUNT_LOC, 0);
+
+	if (args->blur_gradient_enabled && !no_dual_kawase) {
+		// The gradient needs all downsampled levels at once. Keep the pyramid
+		// intact and let the final shader interpolate between its levels locally.
+		glUseProgram(up_pass->prog);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, bctx->blur_textures[iterations - 1]);
+		glBindSampler(0, blur_sampler);
+		glUniform1f(UNIFORM_SCALE_LOC, 1.0F);
+		glUniform2f(UNIFORM_PIXEL_NORM_LOC,
+		            1.0F / (GLfloat)bctx->texture_sizes[0].width,
+		            1.0F / (GLfloat)bctx->texture_sizes[0].height);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, source->texture);
+		glBindSampler(2, blur_sampler);
+		glUniform1i(UNIFORM_LIQUID_GLASS_SOURCE_TEX_LOC, 2);
+		glUniform1i(UNIFORM_BLUR_GRADIENT_LEVEL_COUNT_LOC, iterations);
+		for (int level = 0; level < 5; level++) {
+			const int unit = 3 + level;
+			const int texture_level = min2(level, iterations - 1);
+			glActiveTexture((GLenum)(GL_TEXTURE0 + unit));
+			glBindTexture(GL_TEXTURE_2D, bctx->blur_textures[texture_level]);
+			glBindSampler((GLuint)unit, blur_sampler);
+			glUniform1i(UNIFORM_BLUR_GRADIENT_LEVEL_0_LOC + level, unit);
+		}
+		glActiveTexture(GL_TEXTURE1);
+		if (mask != NULL) {
+			auto inner = (struct gl_texture *)mask->image;
+			glBindTexture(GL_TEXTURE_2D, inner->texture);
+			glUniform1i(UNIFORM_MASK_INVERTED_LOC, mask->inverted);
+			glUniform1f(UNIFORM_MASK_CORNER_RADIUS_LOC, (float)mask->corner_radius);
+			glUniform2f(UNIFORM_MASK_OFFSET_LOC, (float)mask->origin.x,
+			            (float)mask->origin.y);
+			glUniform2f(UNIFORM_MASK_SCALE_LOC, (float)mask_scale.x,
+			            (float)mask_scale.y);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, default_mask);
+			glUniform1i(UNIFORM_MASK_INVERTED_LOC, 0);
+			glUniform1f(UNIFORM_MASK_CORNER_RADIUS_LOC, 0.0F);
+			glUniform2f(UNIFORM_MASK_OFFSET_LOC, 0.0F, 0.0F);
+			glUniform2f(UNIFORM_MASK_SCALE_LOC, 1.0F, 1.0F);
+		}
+		glUniform1i(UNIFORM_MASK_TEX_LOC, 1);
+		glUniform1f(UNIFORM_OPACITY_LOC, (GLfloat)opacity);
+		glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
+		glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
+		glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
+		glUniform1f(UNIFORM_LIQUID_GLASS_ABERRATION_LOC, (float)glass_aberration);
+		glUniform1i(UNIFORM_LIQUID_GLASS_DISTANCE_LOC, glass_distance);
+		glUniform1f(UNIFORM_LIQUID_GLASS_ZOOM_LOC, glass_zoom);
+		glUniform1f(UNIFORM_LIQUID_GLASS_SATURATION_LOC, glass_saturation);
+		glUniform1i(UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC,
+		            glass_zoom_follow_mouse ? 1 : 0);
+		glUniform2f(UNIFORM_LIQUID_GLASS_ANCHOR_LOC, (GLfloat)glass_anchor.x,
+		            (GLfloat)glass_anchor.y);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X1_LOC, bctx->liquid_glass_curve[0]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC, bctx->liquid_glass_curve[1]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_X2_LOC, bctx->liquid_glass_curve[2]);
+		glUniform1f(UNIFORM_LIQUID_GLASS_CURVE_Y2_LOC, bctx->liquid_glass_curve[3]);
+		gl_set_blur_gradient_uniforms(args, origin, true);
+		glBindVertexArray(vao[0]);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fbo);
+		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glDrawElements(GL_TRIANGLES, vao_nelems[0], GL_UNSIGNED_INT, NULL);
+		glActiveTexture(GL_TEXTURE0);
+		return true;
+	}
 
 	for (int i = iterations - 1; i >= 0; --i) {
 		// Scale output width / height back by two in each iteration
@@ -363,8 +454,8 @@ bool gl_dual_kawase_blur(double opacity, float dual_kawase_scale, int kawase_str
 			glBindVertexArray(vao[0]);
 			nelems = vao_nelems[0];
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target_fbo);
-
 			glUniform1f(UNIFORM_OPACITY_LOC, (GLfloat)opacity);
+			gl_set_blur_gradient_uniforms(args, origin, false);
 			glUniform1i(UNIFORM_BLUR_NOISE_RADIUS_LOC, bctx->noise_radius);
 			glUniform1f(UNIFORM_BLUR_NOISE_SCALE_LOC, bctx->noise_scale);
 			glUniform1i(UNIFORM_LIQUID_GLASS_STRENGTH_LOC, glass_strength);
@@ -532,13 +623,14 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	if (bctx->method == BLUR_METHOD_DUAL_KAWASE ||
 	    bctx->method == BLUR_METHOD_LIQUID_GLASS) {
 		ret = gl_dual_kawase_blur(
-		    args->opacity, (float)args->dual_kawase_scale, args->dual_kawase_strength,
+		    origin, args->opacity, (float)args->dual_kawase_scale, args->dual_kawase_strength,
 		    args->liquid_glass_strength,
 		    args->liquid_glass_distance,
 			args->liquid_glass_aberration, (float)args->liquid_glass_zoom,
 		    (float)args->liquid_glass_saturation,
 		    args->liquid_glass_anchor,
-		    args->liquid_glass_zoom_follow_mouse, args->liquid_glass_no_dual_kawase, bctx,
+		    args->liquid_glass_zoom_follow_mouse, args->liquid_glass_no_dual_kawase,
+		    args, bctx,
 		    args->source_mask,
 		    args->source_mask_scale, gd->vertex_array_objects, vao_nelems, source,
 		    gd->samplers[GL_SAMPLER_BLUR], target_fbo, gd->default_mask_texture);
@@ -550,8 +642,11 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	for (GLuint unit = 1; unit <= 7; unit++) {
+		glActiveTexture(GL_TEXTURE0 + unit);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindSampler(unit, 0);
+	}
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -933,6 +1028,30 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			uniform vec2 liquid_glass_anchor;
 			layout(location = UNIFORM_LIQUID_GLASS_ANCHOR_MOUSE_LOC)
 			uniform int liquid_glass_zoom_anchor_mouse;
+			layout(location = UNIFORM_BLUR_GRADIENT_POINTS_LOC)
+			uniform vec2 blur_gradient_points[32];
+			layout(location = UNIFORM_BLUR_GRADIENT_START_LOC)
+			uniform vec2 blur_gradient_start;
+			layout(location = UNIFORM_BLUR_GRADIENT_END_LOC)
+			uniform vec2 blur_gradient_end;
+			layout(location = UNIFORM_BLUR_GRADIENT_POINT_COUNT_LOC)
+			uniform int blur_gradient_point_count;
+			layout(location = UNIFORM_BLUR_GRADIENT_ENABLED_LOC)
+			uniform int blur_gradient_enabled;
+			layout(location = UNIFORM_LIQUID_GLASS_SOURCE_TEX_LOC)
+			uniform sampler2D liquid_glass_source_tex;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_COUNT_LOC)
+			uniform int blur_gradient_level_count;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_0_LOC)
+			uniform sampler2D blur_gradient_level_0;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_1_LOC)
+			uniform sampler2D blur_gradient_level_1;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_2_LOC)
+			uniform sampler2D blur_gradient_level_2;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_3_LOC)
+			uniform sampler2D blur_gradient_level_3;
+			layout(location = UNIFORM_BLUR_GRADIENT_LEVEL_4_LOC)
+			uniform sampler2D blur_gradient_level_4;
 			layout(location = UNIFORM_LIQUID_GLASS_CURVE_X1_LOC)
 			uniform float liquid_glass_curve_x1;
 			layout(location = UNIFORM_LIQUID_GLASS_CURVE_Y1_LOC)
@@ -956,15 +1075,67 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 			out vec4 out_color;
 			float mask_factor();
 			vec2 perturb(vec2, float, float);
+			float blur_gradient_amount() {
+				if (blur_gradient_point_count <= 0) return 1.0;
+				vec2 gradient = blur_gradient_end - blur_gradient_start;
+				float gradient_length_squared = dot(gradient, gradient);
+				float position = gradient_length_squared > 1e-8
+				    ? clamp(dot(texcoord - blur_gradient_start, gradient) / gradient_length_squared, 0.0, 1.0)
+				    : 0.0;
+				vec2 previous = blur_gradient_points[0];
+				if (position <= previous.x) return previous.y;
+				for (int i = 1; i < 32; ++i) {
+					if (i >= blur_gradient_point_count) break;
+					vec2 next = blur_gradient_points[i];
+					if (position <= next.x) {
+						return mix(previous.y, next.y,
+						           (position - previous.x) / (next.x - previous.x));
+					}
+					previous = next;
+				}
+				return previous.y;
+			}
+			vec4 blur_gradient_sample_level(int level, vec2 sample_uv) {
+				if (level <= 0) return texture2D(liquid_glass_source_tex, sample_uv);
+				if (level == 1) return texture2D(blur_gradient_level_0, sample_uv);
+				if (level == 2) return texture2D(blur_gradient_level_1, sample_uv);
+				if (level == 3) return texture2D(blur_gradient_level_2, sample_uv);
+				if (level == 4) return texture2D(blur_gradient_level_3, sample_uv);
+				return texture2D(blur_gradient_level_4, sample_uv);
+			}
+			vec4 blur_gradient_sample(vec2 sample_uv) {
+				float amount = blur_gradient_amount();
+				float level = amount * float(blur_gradient_level_count);
+				int low_level = int(floor(level));
+				int high_level = min(low_level + 1, blur_gradient_level_count);
+				return mix(blur_gradient_sample_level(low_level, sample_uv),
+				           blur_gradient_sample_level(high_level, sample_uv), fract(level));
+			}
 			vec4 liquid_glass_blur(vec2 sample_uv, vec2 sample_offset) {
-				vec4 result = texture2D(tex_src, sample_uv + vec2(-1.0, 0.0) * sample_offset);
-				result += texture2D(tex_src, sample_uv + vec2(-0.5, 0.5) * sample_offset) * 2.0;
-				result += texture2D(tex_src, sample_uv + vec2(0.0, 1.0) * sample_offset);
-				result += texture2D(tex_src, sample_uv + vec2(0.5, 0.5) * sample_offset) * 2.0;
-				result += texture2D(tex_src, sample_uv + vec2(1.0, 0.0) * sample_offset);
-				result += texture2D(tex_src, sample_uv + vec2(0.5, -0.5) * sample_offset) * 2.0;
-				result += texture2D(tex_src, sample_uv + vec2(0.0, -1.0) * sample_offset);
-				result += texture2D(tex_src, sample_uv + vec2(-0.5, -0.5) * sample_offset) * 2.0;
+				vec4 result = blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(-1.0, 0.0) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(-1.0, 0.0) * sample_offset);
+				result += (blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(-0.5, 0.5) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(-0.5, 0.5) * sample_offset)) * 2.0;
+				result += blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(0.0, 1.0) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(0.0, 1.0) * sample_offset);
+				result += (blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(0.5, 0.5) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(0.5, 0.5) * sample_offset)) * 2.0;
+				result += blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(1.0, 0.0) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(1.0, 0.0) * sample_offset);
+				result += (blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(0.5, -0.5) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(0.5, -0.5) * sample_offset)) * 2.0;
+				result += blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(0.0, -1.0) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(0.0, -1.0) * sample_offset);
+				result += (blur_gradient_enabled != 0
+				    ? blur_gradient_sample(sample_uv + vec2(-0.5, -0.5) * sample_offset)
+				    : texture2D(tex_src, sample_uv + vec2(-0.5, -0.5) * sample_offset)) * 2.0;
 				return result / 12.0;
 			}
 			float liquid_glass_bezier(float x) {
@@ -985,7 +1156,8 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 				       3.0 * omt * t * t * liquid_glass_curve_y2 + t * t * t;
 			}
 			void main() {
-				vec2 offset = %.7g * dual_kawase_scale * pixel_norm;
+				float gradient_amount = blur_gradient_enabled != 0 ? blur_gradient_amount() : 1.0;
+				vec2 offset = %.7g * dual_kawase_scale * pixel_norm * gradient_amount;
 				vec2 uv = perturb(texcoord, noise_radius, noise_scale) * pixel_norm * liquid_glass_source_scale / scale;
 				%s
 				vec4 base_color = liquid_glass_blur(uv, offset);
@@ -1000,19 +1172,19 @@ bool gl_create_dual_kawase_blur_context(void *blur_context, GLfloat *projection,
 		// clang-format on
 
 		// Build shader
-const char *warp = method == BLUR_METHOD_LIQUID_GLASS
+		const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                ? "vec2 mask_size = textureSize(mask_tex, 0);\n"
                                   "vec2 maskcoord = (texcoord - mask_offset) / mask_scale;\n"
                                   "vec2 centered = maskcoord - mask_size * 0.5;\n"
                                   "vec2 half_size = mask_size * 0.5;\n"
                                   "float edge_width = float(liquid_glass_distance);\n"
 
-                                  "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm / (2.0 * scale);\n"
+                                  "vec2 window_center = (mask_offset + mask_size * 0.5) * pixel_norm * liquid_glass_source_scale / scale;\n"
                                   "vec2 zoom_origin = window_center;\n"
-                                 "if (liquid_glass_zoom_anchor_mouse == 1) {\n"
-                                 "    zoom_origin = liquid_glass_anchor * pixel_norm / (2.0 * scale);\n"
+                                  "if (liquid_glass_zoom_anchor_mouse == 1) {\n"
+                                  "    zoom_origin = liquid_glass_anchor * pixel_norm * liquid_glass_source_scale / scale;\n"
                                   "}\n"
-                                  "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
+                                   "uv = mix(zoom_origin, uv, liquid_glass_zoom);\n"
 
                                   // Build a normalized radial field over the complete
                                   // window. Unlike the old edge-band calculation, this
@@ -1039,7 +1211,7 @@ const char *warp = method == BLUR_METHOD_LIQUID_GLASS
                                   "    * pixel_norm / (2.0 * scale);\n"
                                   "vec2 aberration_offset = stretch * liquid_glass_aberration\n"
                                   "    * pixel_norm / (2.0 * scale);\n"
-                                  : "vec2 aberration_offset = vec2(0.0);\n";
+                                   : "vec2 aberration_offset = vec2(0.0);\n";
 		size_t shader_len = strlen(FRAG_SHADER_UP) + strlen(warp) + 24 + 1;
 		char *shader_str = ccalloc(shader_len, char);
 		auto real_shader_len =

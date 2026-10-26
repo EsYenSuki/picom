@@ -40,6 +40,14 @@ struct layer {
 	float blur_scale;
 	/// Per-window dual-kawase blur strength; -1 means use the global strength.
 	int blur_strength;
+	/// Enable spatially varying blur opacity for rule-configured windows.
+	bool blur_gradient_enabled;
+	/// Gradient endpoints in screen coordinates.
+	vec2 blur_gradient_start;
+	vec2 blur_gradient_end;
+	/// Blur amount gradient points [position, amount], normalized to 0..1.
+	struct blur_gradient_point blur_gradient_points[BLUR_GRADIENT_MAX_POINTS];
+	unsigned int blur_gradient_point_count;
 	/// Whether this liquid-glass window skips the preliminary dual-kawase blur.
 	bool liquid_glass_no_dual_kawase;
 	/// Strength of the liquid glass effect of this window
@@ -109,7 +117,7 @@ void layout_manager_append_layout(struct layout_manager *lm, struct wm *wm,
                                   uint64_t root_pixmap_generation, ivec2 size,
                                   double zoom_factor, ivec2 zoom_focal,
 	                           bool glass_zoom_follow_mouse, ivec2 glass_anchor,
-	                           double glass_saturation, double blur_min_scale,
+                                    double glass_saturation, double blur_min_scale,
                                    enum blur_method blur_method);
 /// Get the layout `age` frames into the past. Age `0` is the most recently appended
 /// layout.

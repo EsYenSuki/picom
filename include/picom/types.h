@@ -10,6 +10,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/// Maximum number of points in a per-window blur-opacity gradient.
+#define BLUR_GRADIENT_MAX_POINTS 32
+
+struct blur_gradient_point {
+	double position;
+	double amount;
+};
+
 enum blur_method {
 	BLUR_METHOD_NONE = 0,
 	BLUR_METHOD_KERNEL,

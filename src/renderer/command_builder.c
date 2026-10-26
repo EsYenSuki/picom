@@ -277,6 +277,10 @@ command_for_blur(struct layer *layer, struct backend_command *cmd,
 	    .opacity = layer->blur_opacity,
 	    .dual_kawase_scale = layer->blur_scale,
 	    .dual_kawase_strength = layer->blur_strength,
+	    .blur_gradient_enabled = layer->blur_gradient_enabled,
+	    .blur_gradient_start = layer->blur_gradient_start,
+	    .blur_gradient_end = layer->blur_gradient_end,
+	    .blur_gradient_point_count = layer->blur_gradient_point_count,
 	    .liquid_glass_no_dual_kawase = layer->liquid_glass_no_dual_kawase,
 	    .liquid_glass_strength = (int)layer->glass_strength,
 	    .liquid_glass_aberration = (int)layer->glass_aberration,
@@ -289,6 +293,8 @@ command_for_blur(struct layer *layer, struct backend_command *cmd,
 	    .source_mask = layer->options.corner_radius > 0 ? &cmd->source_mask : NULL,
 	    .source_mask_scale = layer->scale,
 	};
+	memcpy(cmd->blur.blur_gradient_points, layer->blur_gradient_points,
+	       sizeof(cmd->blur.blur_gradient_points));
 	return 1;
 }
 

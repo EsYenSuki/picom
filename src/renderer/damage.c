@@ -124,6 +124,13 @@ static inline void command_blur_damage(region_t *damage, region_t *scratch_regio
 	if (cmd1->blur.opacity != cmd2->blur.opacity ||
 	    cmd1->blur.dual_kawase_scale != cmd2->blur.dual_kawase_scale ||
 	    cmd1->blur.dual_kawase_strength != cmd2->blur.dual_kawase_strength ||
+	    cmd1->blur.blur_gradient_enabled != cmd2->blur.blur_gradient_enabled ||
+	    (cmd1->blur.blur_gradient_enabled &&
+	     (!vec2_eq(cmd1->blur.blur_gradient_start, cmd2->blur.blur_gradient_start) ||
+	      !vec2_eq(cmd1->blur.blur_gradient_end, cmd2->blur.blur_gradient_end) ||
+	      cmd1->blur.blur_gradient_point_count != cmd2->blur.blur_gradient_point_count ||
+	      memcmp(cmd1->blur.blur_gradient_points, cmd2->blur.blur_gradient_points,
+	             cmd1->blur.blur_gradient_point_count * sizeof(cmd1->blur.blur_gradient_points[0])) != 0)) ||
 	    cmd1->blur.liquid_glass_no_dual_kawase != cmd2->blur.liquid_glass_no_dual_kawase ||
 	    cmd1->blur.liquid_glass_strength != cmd2->blur.liquid_glass_strength ||
 	    cmd1->blur.liquid_glass_aberration != cmd2->blur.liquid_glass_aberration ||

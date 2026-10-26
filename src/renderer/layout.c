@@ -156,13 +156,56 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
 		out_layer->blur_scale = 1.0F;
 	}
 	out_layer->blur_strength = w_opts.blur_strength;
+	out_layer->blur_gradient_enabled =
+	    (blur_method == BLUR_METHOD_DUAL_KAWASE || blur_method == BLUR_METHOD_LIQUID_GLASS) &&
+	    w_opts.blur_gradient_direction_set && w_opts.blur_gradient_opacity_set;
+	if (out_layer->blur_gradient_enabled) {
+		const float left = (float)out_layer->window.origin.x;
+		const float top = (float)out_layer->window.origin.y;
+		const float right = left + (float)out_layer->window.size.width * (float)out_layer->scale.x;
+		const float bottom = top + (float)out_layer->window.size.height * (float)out_layer->scale.y;
+		const float center_x = (left + right) * 0.5F;
+		const float center_y = (top + bottom) * 0.5F;
+		switch (w_opts.blur_gradient_direction) {
+		case BLUR_GRADIENT_HORIZONTAL:
+			out_layer->blur_gradient_start = (vec2){.x = left, .y = center_y};
+			out_layer->blur_gradient_end = (vec2){.x = right, .y = center_y};
+			break;
+		case BLUR_GRADIENT_VERTICAL:
+			out_layer->blur_gradient_start = (vec2){.x = center_x, .y = top};
+			out_layer->blur_gradient_end = (vec2){.x = center_x, .y = bottom};
+			break;
+		}
+		out_layer->blur_gradient_point_count = w_opts.blur_gradient_opacity_count;
+		for (unsigned int i = 0; i < w_opts.blur_gradient_opacity_count; i++) {
+			out_layer->blur_gradient_points[i] = (struct blur_gradient_point){
+			    .position = w_opts.blur_gradient_opacity[i].position / 100.0,
+			    .amount = w_opts.blur_gradient_opacity[i].amount / 100.0,
+			};
+		}
+	}
 	out_layer->glass_strength = (float)w->glass.strength;
 	out_layer->glass_aberration = (float)w->glass.aberration;
 	out_layer->glass_distance = (float)w->glass.distance;
 	out_layer->glass_zoom = (float)w->glass.zoom;
 	out_layer->glass_saturation = (float)glass_saturation;
-	out_layer->glass_zoom_follow_mouse = glass_zoom_follow_mouse;
-	out_layer->glass_anchor = ivec2_as(glass_anchor);
+	// The shader uses this flag to select the supplied anchor instead of the
+	// window center. It applies to both the global mouse anchor and a fixed
+	// rule anchor; the latter must not be disabled here.
+	out_layer->glass_zoom_follow_mouse =
+	    glass_zoom_follow_mouse || w_opts.liquid_glass_zoom_anchor_set;
+	if (w_opts.liquid_glass_zoom_anchor_set) {
+		// Rule anchors are pixels relative to the window's top-left corner.
+		// Convert them to screen coordinates so they move with the window.
+		out_layer->glass_anchor = (vec2){
+		    .x = out_layer->window.origin.x +
+		         (float)w_opts.liquid_glass_zoom_anchor.x * out_layer->scale.x,
+		    .y = out_layer->window.origin.y +
+		         (float)w_opts.liquid_glass_zoom_anchor.y * out_layer->scale.y,
+		};
+	} else {
+		out_layer->glass_anchor = ivec2_as(glass_anchor);
+	}
 	out_layer->liquid_glass_no_dual_kawase = w_opts.liquid_glass_no_dual_kawase;
 	out_layer->shadow_color.red = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_RED);
 	out_layer->shadow_color.green = (float)win_animatable_get(w, WIN_SCRIPT_SHADOW_GREEN);

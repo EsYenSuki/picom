@@ -793,7 +793,12 @@ void ev_handle(session_t *ps, xcb_generic_event_t *ev) {
 
 	// We intentionally ignore events sent via SendEvent. Those events has the 8th bit
 	// of response_type set, meaning they will match none of the cases below.
-	queue_redraw(ps);
+	// Pointer motion is handled below and only needs a redraw when a feature
+	// that follows the pointer is active. Unconditionally redrawing here makes
+	// ordinary mouse movement repaint the entire screen.
+	if (ev->response_type != XCB_MOTION_NOTIFY) {
+		queue_redraw(ps);
+	}
 	switch (ev->response_type) {
 	case XCB_FOCUS_IN: ev_focus_in(ps, (xcb_focus_in_event_t *)ev); break;
 	case XCB_FOCUS_OUT: ev_focus_out(ps, (xcb_focus_out_event_t *)ev); break;

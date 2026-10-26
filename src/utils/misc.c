@@ -83,7 +83,8 @@ int quickselect(int *elems, int nelem, int k) {
 	return elems[k];
 }
 
-/// Switch to real-time scheduling policy (SCHED_RR) if possible
+/// Switch to real-time scheduling policy (SCHED_RR) at the highest available
+/// priority if possible.
 ///
 /// Make picom realtime to reduce latency, and make rendering times more predictable to
 /// help pacing.
@@ -97,7 +98,7 @@ void set_rr_scheduling(void) {
 	}
 	already_tried = true;
 
-	int priority = sched_get_priority_min(SCHED_RR);
+	int priority = sched_get_priority_max(SCHED_RR);
 
 	if (rtkit_make_realtime(0, priority)) {
 		log_info("Set realtime priority to %d with rtkit.", priority);

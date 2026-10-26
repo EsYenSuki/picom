@@ -534,7 +534,7 @@ static const struct picom_option picom_options[] = {
     [351] = {"liquid-glass-distance-unfocus", INTEGER(liquid_glass_distance_unfocus, 1, INT_MAX), "Distance from the edge over which liquid_glass stretching fades when the "
                                                                                                "window is not focused."},
     [358] = {"liquid-glass-min-scale"       , FLOAT(liquid_glass_min_scale, 0, 1)             , "Minimum window-size scale for liquid_glass strength and distance. (default: 0.0)"},
-    [359] = {"liquid-glass-saturation"      , FLOAT(liquid_glass_saturation, 0, INFINITY)     , "Saturation multiplier for liquid_glass. (default: 1.0)"},
+     [359] = {"liquid-glass-saturation"      , FLOAT(liquid_glass_saturation, 0, INFINITY)     , "Saturation multiplier for liquid_glass. (default: 1.0)"},
     [352] = {"liquid-glass-transition-duration", INTEGER(liquid_glass_transition_duration, 0, INT_MAX), "Duration of the focus <-> unfocus transition of liquid_glass parameters, in "
                                                                                                    "milliseconds. (default: 200)"},
     [353] = {"liquid-glass-curve"          , required_argument, {.offset = offsetof(options_t, liquid_glass_curve), .handler = store_zoom_bezier}, "Liquid_glass edge easing cubic-bezier control points as x1,y1,x2,y2. (default "
