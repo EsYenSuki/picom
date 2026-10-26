@@ -47,6 +47,15 @@ static bool layer_from_window(struct layer *out_layer, struct win *w, ivec2 size
                               double glass_saturation, double blur_min_scale,
                               enum blur_method blur_method) {
 	bool to_paint = false;
+	// Layout layer slots are reused between frames. Initialize gradient data even
+	// when this window has no gradient, since blur commands still copy these fields.
+	out_layer->blur_gradient_enabled = false;
+	out_layer->blur_gradient_start = (vec2){};
+	out_layer->blur_gradient_end = (vec2){};
+	out_layer->blur_gradient_point_count = 0;
+	for (unsigned int i = 0; i < BLUR_GRADIENT_MAX_POINTS; i++) {
+		out_layer->blur_gradient_points[i] = (struct blur_gradient_point){};
+	}
 	auto w_opts = win_options(w);
 	if (!w->ever_damaged || !w_opts.paint) {
 		goto out;

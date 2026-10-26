@@ -55,6 +55,11 @@ struct gl_blur_context {
 
 static void gl_set_blur_gradient_uniforms(const struct backend_blur_args *args,
                                           ivec2 origin, bool enabled) {
+	// The uniform is a fixed-size array. Config parsing currently enforces this
+	// limit, but keep the backend safe if a malformed command reaches it through
+	// another caller.
+	const unsigned int point_count =
+	    min2(args->blur_gradient_point_count, BLUR_GRADIENT_MAX_POINTS);
 	glUniform2f(UNIFORM_BLUR_GRADIENT_START_LOC,
 	            (GLfloat)(args->blur_gradient_start.x - origin.x),
 	            (GLfloat)(args->blur_gradient_start.y - origin.y));
@@ -62,14 +67,14 @@ static void gl_set_blur_gradient_uniforms(const struct backend_blur_args *args,
 	            (GLfloat)(args->blur_gradient_end.x - origin.x),
 	            (GLfloat)(args->blur_gradient_end.y - origin.y));
 	GLfloat points[BLUR_GRADIENT_MAX_POINTS * 2];
-	for (unsigned int i = 0; i < args->blur_gradient_point_count; i++) {
+	for (unsigned int i = 0; i < point_count; i++) {
 		points[i * 2] = (GLfloat)args->blur_gradient_points[i].position;
 		points[i * 2 + 1] = (GLfloat)args->blur_gradient_points[i].amount;
 	}
 	glUniform2fv(UNIFORM_BLUR_GRADIENT_POINTS_LOC,
-	             (GLsizei)args->blur_gradient_point_count, points);
+	             (GLsizei)point_count, points);
 	glUniform1i(UNIFORM_BLUR_GRADIENT_POINT_COUNT_LOC,
-	            (GLint)args->blur_gradient_point_count);
+	            (GLint)point_count);
 	glUniform1i(UNIFORM_BLUR_GRADIENT_ENABLED_LOC, enabled ? 1 : 0);
 }
 
@@ -548,6 +553,11 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	auto bctx = (struct gl_blur_context *)args->blur_context;
 	log_trace("Blur size: %dx%d, method: %d", source->width, source->height, bctx->method);
 	bool ret = false;
+	if (args->blur_gradient_point_count > BLUR_GRADIENT_MAX_POINTS) {
+		log_error("Blur gradient has %u points; maximum supported is %d",
+		          args->blur_gradient_point_count, BLUR_GRADIENT_MAX_POINTS);
+		return false;
+	}
 
 	// Remainder: regions are in Xorg coordinates
 	auto reg_blur_resized =
@@ -555,6 +565,7 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	const rect_t *extent = pixman_region32_extents(args->target_mask);
 	int width = extent->x2 - extent->x1, height = extent->y2 - extent->y1;
 	if (width == 0 || height == 0) {
+		pixman_region32_fini(&reg_blur_resized);
 		return true;
 	}
 
@@ -563,6 +574,7 @@ bool gl_blur(struct backend_base *base, ivec2 origin, image_handle target_,
 	             *rects_resized =
 	                 pixman_region32_rectangles(&reg_blur_resized, &nrects_resized);
 	if (!nrects || !nrects_resized) {
+		pixman_region32_fini(&reg_blur_resized);
 		return true;
 	}
 
